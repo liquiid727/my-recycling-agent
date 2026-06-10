@@ -1,0 +1,6 @@
+# CN: 项目配置文件，声明工具、工作流、运行时或构建系统的可执行约定。
+# EN: Project configuration file declaring executable tool, workflow, runtime, or build conventions.
+
+display_name: SpecOS UI Design
+short_description: Designs traceable SpecOS web UI screens, states, and handoffs.
+default_prompt: Use this skill for spec-web-ui UI design, layout, component, state, responsive, and handoff work that must stay aligned with SpecOS specs and rules.

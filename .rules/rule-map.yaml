@@ -1,0 +1,96 @@
+# CN: 项目配置文件，声明工具、工作流、运行时或构建系统的可执行约定。
+# EN: Project configuration file declaring executable tool, workflow, runtime, or build conventions.
+
+version: 1
+project: specos-ai
+
+default_entrypoint:
+  - .rules/project.md
+  - AGENTS.md
+
+work_types:
+  backend:
+    rules:
+      - rules/backend/go-backend-governance.md
+      - rules/backend/redis-key-governance.md
+      - rules/shared/error-code-governance.md
+    agents:
+      - ddd-domain-agent
+      - openapi-agent
+      - db-migration-agent
+      - bruno-test-agent
+
+  frontend:
+    rules:
+      - rules/frontend/react-workbench-delivery.md
+      - rules/shared/error-code-governance.md
+    agents:
+      - spec-draft-agent
+      - architecture-agent
+      - ui-design-agent
+      - spec-agent
+      - frontend-execution-agent
+      - playwright-test-agent
+      - test-editor
+
+  ui_prototype:
+    rules:
+      - rules/ui/pencil-prototype-ui.md
+      - rules/frontend/react-workbench-delivery.md
+    agents:
+      - spec-draft-agent
+      - spec-agent
+      - playwright-test-agent
+
+  spec:
+    rules:
+      - specs/_rules/README.md
+      - rules/shared/error-code-governance.md
+    agents:
+      - spec-draft-agent
+      - architecture-agent
+      - spec-agent
+      - ddd-domain-agent
+      - test-editor
+
+  intake:
+    rules:
+      - spec-draft/requirement-intake-flow.md
+      - .rules/project.md
+    agents:
+      - spec-draft-agent
+      - architecture-agent
+      - spec-agent
+
+  tests:
+    rules:
+      - tests/README.md
+      - rules/ci/spec-release-gates.md
+    agents:
+      - test-editor
+      - bruno-test-agent
+      - playwright-test-agent
+
+  ci:
+    rules:
+      - rules/ci/spec-release-gates.md
+      - scripts/checks/README.md
+    agents:
+      - ci-editor
+      - execution-editor
+
+  orchestration:
+    rules:
+      - ai/workflows/README.md
+      - scripts/orchestration/README.md
+      - rules/ci/spec-release-gates.md
+    agents:
+      - spec-draft-agent
+      - architecture-agent
+      - spec-agent
+      - frontend-execution-agent
+      - backend-execution-agent
+      - migration-execution-agent
+      - execution-editor
+      - ci-editor
+      - reviewer

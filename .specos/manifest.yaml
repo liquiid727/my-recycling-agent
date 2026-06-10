@@ -1,0 +1,22 @@
+# CN: 项目配置文件，声明工具、工作流、运行时或构建系统的可执行约定。
+# EN: Project configuration file declaring executable tool, workflow, runtime, or build conventions.
+
+project:
+  name: specos-fullstack
+  type: fullstack
+stacks:
+  frontend: next
+  backend: node-api
+artifacts:
+  draftsDir: spec-draft
+  specsDir: specs/current
+  testsDir: tests
+  resultsDir: tests/results
+rulePacks:
+  - spec-driven-delivery
+agentTemplates:
+  - fullstack-agent
+workflows:
+  - default-fullstack
+ci:
+  checkCommand: npx specos check

@@ -1,0 +1,25 @@
+# CN: 项目配置文件，声明工具、工作流、运行时或构建系统的可执行约定。
+# EN: Project configuration file declaring executable tool, workflow, runtime, or build conventions.
+
+openapi: 3.1.0
+info:
+  title: <domain>-<feature>
+  version: 0.1.0
+paths:
+  /<domain>/<feature>/<action>:
+    <method>:
+      summary: <summary>
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                <field>:
+                  type: string
+      responses:
+        "200":
+          description: <success-response>
+        "400":
+          description: <error-response>

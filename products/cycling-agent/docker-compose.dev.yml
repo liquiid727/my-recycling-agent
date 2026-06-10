@@ -1,0 +1,37 @@
+# CN: 本地开发基础设施配置，启动 PostgreSQL 与 Redis 供后端 live 验证使用。
+# EN: Local development infrastructure for PostgreSQL and Redis used by backend live verification.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cycling-agent-postgres
+    environment:
+      POSTGRES_DB: cycling_agent
+      POSTGRES_USER: cycling
+      POSTGRES_PASSWORD: cycling
+    ports:
+      - "54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cycling -d cycling_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - cycling-agent-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: cycling-agent-redis
+    ports:
+      - "63799:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - cycling-agent-redis-data:/data
+
+volumes:
+  cycling-agent-postgres-data:
+  cycling-agent-redis-data:

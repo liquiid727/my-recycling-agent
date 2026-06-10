@@ -1,0 +1,25 @@
+{
+  "changeId": "spec-change-agent-workflow",
+  "selectedRoutes": [
+    "frontend",
+    "backend",
+    "migration"
+  ],
+  "executionMode": "parallel",
+  "reasoning": [
+    "Frontend route is selected because the request introduces conditional UI-design review and user-facing workflow states.",
+    "Backend route is selected because workflow metadata, agent routing, and request classification affect orchestration behavior.",
+    "Migration route is selected to model schema and rollout work as a first-class execution track in the lifecycle contract."
+  ],
+  "handoffArtifacts": [
+    "spec.md",
+    "architecture-review.md",
+    "design-review.md",
+    "execution-plan.md"
+  ],
+  "gates": [
+    "implementation-review-gate",
+    "final-review-gate",
+    "acceptance-promote-archive"
+  ]
+}

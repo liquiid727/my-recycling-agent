@@ -1,0 +1,387 @@
+/*
+ * CN: 首页规划页面，承载输入表单、流式阶段反馈、澄清提示和即时结果。
+ * EN: Home planning page with query form, streaming stage feedback, clarification prompts, and inline results.
+ */
+
+import PlanResultView from "../components/PlanResultView";
+import ThemeToggle from "../components/ThemeToggle";
+import { usePlannerFlow } from "../features/planner/hooks";
+import { Link, useNavigate } from "react-router-dom";
+
+const START_POINT_SUGGESTIONS = [
+  { name: "闻涛路滨江段", region: "滨江", hint: "钱塘江休闲往返" },
+  { name: "杨公堤南口", region: "西湖", hint: "西湖/龙井轻爬坡" },
+  { name: "湘湖游客中心", region: "湘湖", hint: "湘湖半日休闲" },
+  { name: "奥体印象城外广场", region: "滨江", hint: "滨江晨骑刷圈" },
+  { name: "余杭良渚文化村口", region: "余杭", hint: "余杭轻郊野" }
+];
+
+const REGION_OPTIONS = ["滨江", "西湖", "湘湖", "萧山", "余杭", "龙井"];
+
+export default function HomePage() {
+  const navigate = useNavigate();
+  const {
+    clarificationPrompt,
+    error,
+    inputMode,
+    loading,
+    loadingLabel,
+    messages,
+    planningMode,
+    quickReplies,
+    query,
+    result,
+    setInputMode,
+    setPlanningMode,
+    setQuery,
+    setQueryFromQuickReply,
+    setStructuredField,
+    setTargetDate,
+    detectOriginLocation,
+    stageUpdates,
+    structuredConstraints,
+    submit,
+    targetDate
+  } = usePlannerFlow({
+    onSuccess: (plan) => navigate(`/plans/${plan.request_no}`)
+  });
+
+  function applyStartPointSuggestion(name: string, region: string) {
+    setStructuredField("start_point", name);
+    setStructuredField("origin_region", region);
+  }
+
+  function toggleDestinationPreference(preference: string) {
+    const current = structuredConstraints.destination_preferences ?? [];
+    const next = current.includes(preference) ? current.filter((item) => item !== preference) : [...current, preference];
+    setStructuredField("destination_preferences", next);
+  }
+
+  return (
+    <main className="page-shell">
+      <ThemeToggle />
+      <section className="hero-panel">
+        <p className="eyebrow">AAA Ride Buddy</p>
+        <h1>AAA骑车帮帮</h1>
+        <p className="hero-copy">像和朋友聊天一样说出你想怎么骑。我会先帮你判断值不值得出发，再给轻松、可执行的路线选择。</p>
+        <div className="hero-stat-row" aria-label="规划输出内容">
+          <span>先给结论</span>
+          <span>轻松追问</span>
+          <span>路线与天气</span>
+        </div>
+        <p className="hero-link-row">
+          <Link to="/settings">打开偏好设置</Link>
+        </p>
+      </section>
+
+      <section className="planner-panel">
+        <form className="planner-form" onSubmit={submit}>
+          <div className="segmented-control" aria-label="MVP 阶段规划模式">
+            <button type="button" aria-pressed={planningMode === "route"} onClick={() => setPlanningMode("route")}>
+              今晚 / 下午骑一下
+            </button>
+            <button type="button" aria-pressed={planningMode === "nearby_trip"} onClick={() => setPlanningMode("nearby_trip")}>
+              周末骑行出行
+            </button>
+          </div>
+          <p className="planner-hint">{planningMode === "nearby_trip" ? "2 到 3 天游骑行计划" : "市区内即时骑行决策"}</p>
+
+          <div className="segmented-control" aria-label="规划输入方式">
+            <button type="button" aria-pressed={inputMode === "natural"} onClick={() => setInputMode("natural")}>
+              一句话描述
+            </button>
+            <button type="button" aria-pressed={inputMode === "structured"} onClick={() => setInputMode("structured")}>
+              表单规划
+            </button>
+          </div>
+
+          <section className="chat-panel" aria-label="骑行规划对话">
+            <div className="quick-reply-row" aria-label="快捷回复">
+              {(quickReplies.length > 0 ? quickReplies : ["今晚轻松骑", "现在出发", "不要爬坡", "骑 2 小时", "周末两天", "千岛湖"]).map((reply) => (
+                <button key={reply} type="button" className="quick-reply-chip" onClick={() => setQueryFromQuickReply(reply)}>
+                  {reply}
+                </button>
+              ))}
+            </div>
+            <div className="chat-thread">
+              {messages.map((message) => (
+                <article key={message.id} className={`chat-message chat-message-${message.role}`}>
+                  <span>{message.role === "assistant" ? "AAA骑车帮帮" : "你"}</span>
+                  <p>{message.content}</p>
+                </article>
+              ))}
+              {loading ? (
+                <article className="chat-message chat-message-assistant">
+                  <span>AAA骑车帮帮</span>
+                  <p>{loadingLabel ?? (planningMode === "nearby_trip" ? "我正在整理周末出行方案，先给你结论。" : "我正在看天气和路线难度。")}</p>
+                </article>
+              ) : null}
+            </div>
+
+            {inputMode === "natural" ? (
+              <label className="field-label chat-composer" htmlFor="planner-query">
+                骑行需求
+                <textarea
+                  id="planner-query"
+                  className="planner-input"
+                  placeholder={
+                    clarificationPrompt
+                      ? planningMode === "nearby_trip"
+                        ? "直接回复：从杭州市区出发，骑两天，可以过夜"
+                        : "直接回复：从闻涛路滨江段出发，骑 2 小时，不要爬坡"
+                      : planningMode === "nearby_trip"
+                        ? "例如：周末想出去骑车，附近有什么推荐线路么"
+                        : "例如：我今天晚上想出去骑行一下"
+                  }
+                  rows={3}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+            ) : null}
+          </section>
+
+          {inputMode === "structured" ? (
+            <div className="structured-grid structured-grid-followup">
+              <label className="field-label" htmlFor="target-date">
+                目标日期
+                <input id="target-date" type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} />
+              </label>
+              <label className="field-label" htmlFor="departure-time">
+                出发时间
+                <input
+                  id="departure-time"
+                  type="time"
+                  value={structuredConstraints.departure_time ?? ""}
+                  onChange={(event) => setStructuredField("departure_time", event.target.value)}
+                />
+              </label>
+              <label className="field-label field-label-wide" htmlFor="start-point">
+                准确出发地点
+                <input
+                  id="start-point"
+                  aria-label="准确出发地点"
+                  placeholder="输入路名、地标或骑行集合点，例如：闻涛路滨江段"
+                  value={structuredConstraints.start_point ?? ""}
+                  onChange={(event) => setStructuredField("start_point", event.target.value)}
+                />
+              </label>
+              <div className="field-label">
+                定位
+                <button type="button" className="secondary-button" onClick={detectOriginLocation}>
+                  使用当前位置
+                </button>
+              </div>
+              <label className="field-label" htmlFor="origin-region">
+                出发片区
+                <select
+                  id="origin-region"
+                  aria-label="出发片区"
+                  value={structuredConstraints.origin_region ?? "滨江"}
+                  onChange={(event) => setStructuredField("origin_region", event.target.value)}
+                >
+                  {REGION_OPTIONS.map((region) => (
+                    <option key={region} value={region}>
+                      {region}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="field-label field-label-wide">
+                地点关键字
+                <div className="suggestion-row" aria-label="常用出发地点">
+                  {START_POINT_SUGGESTIONS.map((item) => (
+                    <button
+                      key={item.name}
+                      type="button"
+                      className="suggestion-chip"
+                      aria-label={item.name}
+                      onClick={() => applyStartPointSuggestion(item.name, item.region)}
+                    >
+                      <span>{item.name}</span>
+                      <small>{item.hint}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="field-label" htmlFor="available-hours">
+                可骑时长
+                <input
+                  id="available-hours"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={structuredConstraints.available_hours ?? ""}
+                  onChange={(event) => setStructuredField("available_hours", event.target.value)}
+                />
+              </label>
+              <label className="field-label" htmlFor="target-distance">
+                目标距离
+                <input
+                  id="target-distance"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={structuredConstraints.target_distance_km ?? ""}
+                  onChange={(event) => setStructuredField("target_distance_km", event.target.value)}
+                />
+              </label>
+              {planningMode === "nearby_trip" ? (
+                <>
+                  <label className="field-label" htmlFor="duration-bucket">
+                    出行时长
+                    <select
+                      id="duration-bucket"
+                      value={structuredConstraints.duration_bucket ?? "two_day"}
+                      onChange={(event) => setStructuredField("duration_bucket", event.target.value)}
+                    >
+                      <option value="two_day">两天</option>
+                      <option value="three_day">三天</option>
+                      <option value="half_day">半天</option>
+                      <option value="one_day">一天</option>
+                    </select>
+                  </label>
+                  <label className="field-label" htmlFor="return-preference">
+                    返程偏好
+                    <select
+                      id="return-preference"
+                      value={structuredConstraints.return_preference ?? "ride_back"}
+                      onChange={(event) => setStructuredField("return_preference", event.target.value)}
+                    >
+                      <option value="ride_back">骑回</option>
+                      <option value="public_transport">公共交通返程</option>
+                      <option value="shorten_route">缩短路线</option>
+                    </select>
+                  </label>
+                  <label className="field-label" htmlFor="overnight-preference">
+                    过夜偏好
+                    <select
+                      id="overnight-preference"
+                      value={structuredConstraints.overnight_preference ?? "required"}
+                      onChange={(event) => setStructuredField("overnight_preference", event.target.value)}
+                    >
+                      <option value="required">接受过夜</option>
+                      <option value="optional">可过夜可不住</option>
+                      <option value="avoid">不想过夜</option>
+                    </select>
+                  </label>
+                  <label className="field-label" htmlFor="lodging-preference">
+                    住宿偏好
+                    <input
+                      id="lodging-preference"
+                      value={structuredConstraints.lodging_preference ?? ""}
+                      onChange={(event) => setStructuredField("lodging_preference", event.target.value)}
+                    />
+                  </label>
+                  <div className="field-label field-label-wide">
+                    目的地偏好
+                    <div className="suggestion-row" aria-label="目的地偏好">
+                      {["千岛湖", "湖州", "江边", "咖啡", "亲水", "湖区", "公园", "茶村", "轻爬坡", "轻郊游"].map((preference) => (
+                        <button
+                          key={preference}
+                          type="button"
+                          className="suggestion-chip"
+                          aria-pressed={(structuredConstraints.destination_preferences ?? []).includes(preference)}
+                          onClick={() => toggleDestinationPreference(preference)}
+                        >
+                          <span>{preference}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : null}
+              <label className="field-label" htmlFor="fitness-level">
+                体力等级
+                <select
+                  id="fitness-level"
+                  value={structuredConstraints.fitness_level ?? "medium"}
+                  onChange={(event) => setStructuredField("fitness_level", event.target.value)}
+                >
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                </select>
+              </label>
+              <label className="field-label" htmlFor="ride-style">
+                骑行风格
+                <select
+                  id="ride-style"
+                  value={structuredConstraints.ride_style ?? "scenic_relaxed"}
+                  onChange={(event) => setStructuredField("ride_style", event.target.value)}
+                >
+                  <option value="scenic_relaxed">风景轻松</option>
+                  <option value="climb">轻爬坡</option>
+                  <option value="training_loop">刷圈训练</option>
+                  <option value="general">通用</option>
+                </select>
+              </label>
+              <label className="field-label" htmlFor="slope-tolerance">
+                爬坡接受度
+                <select
+                  id="slope-tolerance"
+                  value={structuredConstraints.slope_tolerance ?? "avoid"}
+                  onChange={(event) => setStructuredField("slope_tolerance", event.target.value)}
+                >
+                  <option value="avoid">avoid</option>
+                  <option value="neutral">neutral</option>
+                  <option value="prefer">prefer</option>
+                </select>
+              </label>
+              <label className="field-label" htmlFor="priority">
+                偏好重点
+                <input
+                  id="priority"
+                  value={structuredConstraints.priority ?? ""}
+                  onChange={(event) => setStructuredField("priority", event.target.value)}
+                />
+              </label>
+            </div>
+          ) : null}
+          <div className="planner-actions">
+            <button className="primary-button" type="submit" disabled={loading}>
+              {loading ? "规划中..." : inputMode === "natural" ? "发送" : "开始规划"}
+            </button>
+            <p className="planner-hint">直接补一句就行，我会记住前面聊过的内容。</p>
+          </div>
+        </form>
+      </section>
+
+      <section className="result-grid">
+        {!loading && !error && !result ? (
+          <article className="state-panel">
+            <h2>待生成</h2>
+            <p>提交后会先返回本次是否建议出发，再展示路线、天气风险、补给、装备和周末住宿安排。</p>
+          </article>
+        ) : null}
+
+        {loading ? (
+          <article className="state-panel">
+            <h2>{loadingLabel ?? "正在生成路线建议"}</h2>
+            <p>{planningMode === "nearby_trip" ? "系统正在匹配周末目的地、路线模板、住宿、装备、天气窗口、返程方案与风险。" : "系统正在解析需求、确认出发点、匹配市区路线，并计算天气与风险。"}</p>
+            {stageUpdates.length > 0 ? (
+              <ul className="stage-update-list">
+                {stageUpdates.map((stage, index) => (
+                  <li key={`${stage.stage_name}-${index}`}>
+                    <strong>{stage.stage_name}</strong>
+                    {" · "}
+                    {stage.summary}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </article>
+        ) : null}
+
+        {error ? (
+          <article className="state-panel state-error" role="alert">
+            <h2>请求失败</h2>
+            <p>{error}</p>
+          </article>
+        ) : null}
+
+        {result ? <PlanResultView result={result} /> : null}
+      </section>
+    </main>
+  );
+}

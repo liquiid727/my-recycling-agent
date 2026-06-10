@@ -1,0 +1,542 @@
+# CN: 项目配置文件，声明工具、工作流、运行时或构建系统的可执行约定。
+# EN: Project configuration file declaring executable tool, workflow, runtime, or build conventions.
+
+version: 1
+project: specos-ai
+purpose: Spec-driven AI IDE orchestration
+
+defaults:
+  language: zh-CN
+  output_style: concise
+  require_traceability: true
+  require_open_questions: true
+  protect_human_authored_files: true
+
+context_order:
+  - readme.md
+  - README.md
+  - .rules/project.md
+  - rules/
+  - spec-draft/
+  - specs/current/project-context.md
+  - specs/current/architecture-context.md
+  - specs/current/domain-context.md
+  - specs/current/
+  - specs/changes/
+  - tests/
+  - ai/agents/
+
+calling_convention:
+  selection_source: .agents/manifest.yaml
+  role_path_base: .agents/
+  canonical_path_base: repository root
+  prompt_assembly_order:
+    - AGENTS.md
+    - .codex/instructions.md
+    - selected role metadata from .agents/manifest.yaml
+    - selected role_prompt
+    - selected canonical
+    - selected skills
+    - selected context_includes
+  routing_rules:
+    - Only load the selected role's role_prompt, canonical, skills, and context_includes.
+    - Do not preload repository or external skills unless they are declared on the selected role.
+    - Prefer switching agents or splitting tasks over broadening one agent's skill set.
+    - Roles with empty skills run as role-and-rules-only agents.
+    - New request intake must start with spec-draft-agent classification before downstream routing.
+
+request_classes:
+  - raw-requirement
+  - draft-only
+  - active-change
+  - implementation
+  - test
+  - review
+  - acceptance
+  - tooling
+
+change_states:
+  - drafted
+  - architected
+  - designed
+  - changed
+  - executing
+  - implementation-reviewed
+  - test-ready
+  - tested
+  - final-reviewed
+  - accepted
+  - promoted
+  - archived
+  - blocked
+
+review_results:
+  - pass
+  - warning
+  - blocked
+  - rejected
+
+execution_routes:
+  - route_key: frontend
+    roles:
+      - frontend-execution-agent
+  - route_key: backend
+    roles:
+      - backend-execution-agent
+  - route_key: local-runtime
+    roles:
+      - local-dev-runtime-agent
+  - route_key: migration
+    roles:
+      - migration-execution-agent
+
+roles:
+  spec-draft-agent:
+    role_prompt: roles/spec-draft-agent.md
+    canonical: ai/agents/spec-draft-agent.md
+    skill_mode: scoped_only
+    skills: []
+    context_includes:
+      - .rules/project.md
+      - spec-draft/README.md
+      - spec-draft/_template/
+      - spec-draft/requirement-intake-flow.md
+      - specs/current/
+      - specs/changes/
+    owns:
+      - request classification
+      - spec-draft/
+      - change-id suggestions
+    outputs:
+      - request class
+      - structured draft
+      - assumptions and open questions
+
+  architecture-agent:
+    role_prompt: roles/architecture-agent.md
+    canonical: ai/agents/architecture-agent.md
+    skill_mode: scoped_only
+    skills:
+      - name: cycling-agent-mvp-orchestration
+        path: /Users/liquiid/.codex/skills/cycling-agent-mvp-orchestration/SKILL.md
+        required: false
+        purpose: Canonical backend orchestration, identifier rules, and system-boundary guidance.
+    context_includes:
+      - .rules/project.md
+      - rules/backend/go-backend-governance.md
+      - rules/backend/goose-migration-standards.md
+      - rules/shared/error-code-governance.md
+      - specs/current/project-context.md
+      - specs/current/architecture-context.md
+      - specs/current/domain-context.md
+      - spec-draft/
+      - specs/changes/
+    owns:
+      - architecture-review.md
+      - system impact and route recommendations
+    outputs:
+      - architecture decision
+      - dependency and migration risks
+      - execution route recommendations
+
+  ui-design-agent:
+    role_prompt: roles/ui-design-agent.md
+    canonical: ai/agents/ui-design-agent.md
+    skill_mode: scoped_only
+    activation_conditions:
+      - Request changes frontend, user flow, interaction states, console UI, or design handoff.
+      - Skip and mark `design-review.md` as `not-applicable` when the change is backend-only or tooling-only.
+    skills:
+      - name: tool-config-ui
+        path: .skills/tool-config-ui/SKILL.md
+        required: false
+        purpose: Tool-style configuration pages, policy editors, switchboards, tables, and dangerous operations.
+      - name: specos-ui-design
+        path: .codex/skills/specos-ui-design/SKILL.md
+        required: false
+        purpose: SpecOS-specific UI design flow for spec-web-ui layouts, states, and handoff notes.
+    context_includes:
+      - .rules/project.md
+      - rules/frontend/react-workbench-delivery.md
+      - rules/ui/pencil-prototype-ui.md
+      - spec-web-ui/
+      - spec-draft/
+      - specs/current/
+      - specs/changes/
+    owns:
+      - design-review.md
+      - UI design notes
+      - screen state coverage
+    outputs:
+      - UI design plan
+      - state coverage notes
+      - component and responsive behavior notes
+
+  spec-agent:
+    role_prompt: roles/spec-agent.md
+    canonical: ai/agents/spec-agent.md
+    skill_mode: scoped_only
+    skills: []
+    context_includes:
+      - .rules/project.md
+      - specs/_rules/README.md
+      - spec-draft/
+      - specs/current/
+      - specs/changes/
+      - tests/
+    owns:
+      - specs/changes/
+      - specs/current/
+      - specs/archive/
+      - changelog and promotion handoff
+    outputs:
+      - normalized change package
+      - execution plan
+      - promote and archive notes
+
+  frontend-execution-agent:
+    role_prompt: roles/frontend-execution-agent.md
+    canonical: ai/agents/frontend-execution-agent.md
+    skill_mode: scoped_only
+    skills: []
+    context_includes:
+      - .rules/project.md
+      - rules/frontend/react-workbench-delivery.md
+      - specs/current/
+      - specs/changes/
+      - tests/README.md
+    owns:
+      - frontend implementation
+      - implementation-coupled frontend unit tests
+      - implementation-report.frontend.md
+    outputs:
+      - frontend code changes
+      - frontend validation evidence
+
+  backend-execution-agent:
+    role_prompt: roles/backend-execution-agent.md
+    canonical: ai/agents/backend-execution-agent.md
+    skill_mode: scoped_only
+    skills:
+      - name: cycling-agent-mvp-orchestration
+        path: /Users/liquiid/.codex/skills/cycling-agent-mvp-orchestration/SKILL.md
+        required: false
+        purpose: Canonical backend orchestration, identifier rules, and system-boundary guidance.
+    context_includes:
+      - .rules/project.md
+      - rules/backend/go-backend-governance.md
+      - rules/shared/error-code-governance.md
+      - specs/current/
+      - specs/changes/
+      - tests/README.md
+    owns:
+      - backend implementation
+      - implementation-coupled backend unit tests
+      - implementation-report.backend.md
+    outputs:
+      - backend code changes
+      - backend validation evidence
+
+  local-dev-runtime-agent:
+    role_prompt: roles/local-dev-runtime-agent.md
+    canonical: ai/agents/local-dev-runtime-agent.md
+    skill_mode: scoped_only
+    skills: []
+    activation_conditions:
+      - Request asks to start, restart, stop, inspect, or verify local backend/frontend dev services.
+      - Request asks to diagnose local dev server port conflicts, stale listeners, or service health.
+    context_includes:
+      - .rules/project.md
+      - Makefile
+      - products/cycling-agent/README.md
+      - products/cycling-agent/backend/pyproject.toml
+      - products/cycling-agent/frontend/package.json
+    owns:
+      - local dev service lifecycle
+      - backend/frontend port checks
+      - local runtime health evidence
+    outputs:
+      - service status summary
+      - start or restart command evidence
+      - backend and frontend health check results
+
+  migration-execution-agent:
+    role_prompt: roles/migration-execution-agent.md
+    canonical: ai/agents/migration-execution-agent.md
+    skill_mode: scoped_only
+    skills:
+      - name: cycling-agent-mvp-orchestration
+        path: /Users/liquiid/.codex/skills/cycling-agent-mvp-orchestration/SKILL.md
+        required: false
+        purpose: Canonical backend orchestration, identifier rules, and system-boundary guidance.
+    context_includes:
+      - .rules/project.md
+      - rules/backend/go-backend-governance.md
+      - rules/backend/goose-migration-standards.md
+      - specs/current/
+      - specs/changes/
+    owns:
+      - migration implementation notes
+      - rollout and rollback sequencing
+      - implementation-report.migration.md
+    outputs:
+      - migration checklist
+      - rollout and compatibility evidence
+
+  ddd-domain-agent:
+    role_prompt: roles/ddd-domain-agent.md
+    canonical: ai/agents/ddd-domain-agent.md
+    skill_mode: scoped_only
+    skills:
+      - name: cycling-agent-mvp-orchestration
+        path: /Users/liquiid/.codex/skills/cycling-agent-mvp-orchestration/SKILL.md
+        required: false
+        purpose: Canonical Hangzhou cycling-agent MVP orchestration model, backend role boundaries, identifier rules, and tool permissions.
+    context_includes:
+      - .rules/project.md
+      - rules/backend/go-backend-governance.md
+      - rules/shared/error-code-governance.md
+      - specs/current/project-context.md
+      - specs/current/architecture-context.md
+      - specs/current/domain-context.md
+      - spec-draft/
+      - specs/current/
+      - specs/changes/
+    owns:
+      - domain boundary notes
+      - aggregate and invariant proposals
+    outputs:
+      - domain model notes
+      - boundary risks
+
+  openapi-agent:
+    role_prompt: roles/openapi-agent.md
+    canonical: ai/agents/openapi-agent.md
+    skill_mode: scoped_only
+    skills:
+      - name: cycling-agent-mvp-orchestration
+        path: /Users/liquiid/.codex/skills/cycling-agent-mvp-orchestration/SKILL.md
+        required: false
+        purpose: Canonical Hangzhou cycling-agent MVP orchestration model, backend role boundaries, identifier rules, and tool permissions.
+    context_includes:
+      - .rules/project.md
+      - rules/backend/go-backend-governance.md
+      - rules/shared/error-code-governance.md
+      - specs/current/
+      - specs/changes/
+      - tests/bruno/
+    owns:
+      - API contracts
+      - request and response examples
+    outputs:
+      - OpenAPI contract updates
+      - schema questions
+
+  db-migration-agent:
+    role_prompt: roles/db-migration-agent.md
+    canonical: ai/agents/db-migration-agent.md
+    skill_mode: scoped_only
+    skills:
+      - name: cycling-agent-mvp-orchestration
+        path: /Users/liquiid/.codex/skills/cycling-agent-mvp-orchestration/SKILL.md
+        required: false
+        purpose: Canonical Hangzhou cycling-agent MVP orchestration model, backend role boundaries, identifier rules, and tool permissions.
+    context_includes:
+      - .rules/project.md
+      - rules/backend/go-backend-governance.md
+      - rules/backend/goose-migration-standards.md
+      - specs/current/
+      - specs/changes/
+    owns:
+      - migration planning
+      - rollout and rollback notes
+    outputs:
+      - migration checklist
+      - compatibility risks
+
+  test-editor:
+    role_prompt: roles/test-editor.md
+    canonical: ai/agents/test-editor.md
+    skill_mode: scoped_only
+    skills: []
+    context_includes:
+      - .rules/project.md
+      - tests/README.md
+      - tests/plans/
+      - tests/schedules/
+      - specs/current/
+      - specs/changes/
+    owns:
+      - tests/plans/
+      - tests/schedules/
+      - independent test routing
+    outputs:
+      - scenario coverage
+      - test-plan and schedule
+      - test gaps
+
+  bruno-test-agent:
+    role_prompt: roles/bruno-test-agent.md
+    canonical: ai/agents/bruno-test-agent.md
+    skill_mode: scoped_only
+    skills: []
+    context_includes:
+      - .rules/project.md
+      - rules/shared/error-code-governance.md
+      - tests/README.md
+      - tests/bruno/
+      - specs/current/
+      - specs/changes/
+    owns:
+      - tests/bruno/
+      - API scenario assertions
+    outputs:
+      - Bruno collections
+      - environment notes
+
+  e2e-test-agent:
+    role_prompt: roles/e2e-test-agent.md
+    canonical: ai/agents/e2e-test-agent.md
+    skill_mode: scoped_only
+    skills: []
+    context_includes:
+      - .rules/project.md
+      - rules/frontend/react-workbench-delivery.md
+      - rules/shared/error-code-governance.md
+      - tests/README.md
+      - tests/plans/
+      - tests/scenarios/
+      - tests/results/
+      - specs/current/
+      - specs/changes/
+    owns:
+      - end-to-end business journey coverage
+      - scenario fixtures and preconditions
+      - normalized scenario-result mapping
+    outputs:
+      - E2E journey matrix
+      - fixture and environment checklist
+      - scenario-result normalization notes
+
+  playwright-test-agent:
+    role_prompt: roles/playwright-test-agent.md
+    canonical: ai/agents/playwright-test-agent.md
+    skill_mode: scoped_only
+    skills: []
+    context_includes:
+      - .rules/project.md
+      - rules/frontend/react-workbench-delivery.md
+      - tests/README.md
+      - spec-web-ui/
+      - specs/current/
+      - specs/changes/
+    owns:
+      - browser scenario plans
+      - UI state coverage
+    outputs:
+      - Playwright scenario list
+      - flaky risk notes
+
+  unit-test-agent:
+    role_prompt: roles/unit-test-agent.md
+    canonical: ai/agents/unit-test-agent.md
+    skill_mode: scoped_only
+    skills:
+      - name: cycling-agent-mvp-orchestration
+        path: /Users/liquiid/.codex/skills/cycling-agent-mvp-orchestration/SKILL.md
+        required: false
+        purpose: Canonical Hangzhou cycling-agent MVP orchestration model, backend role boundaries, identifier rules, and tool permissions.
+    context_includes:
+      - .rules/project.md
+      - tests/README.md
+      - specs/current/
+      - specs/changes/
+    owns:
+      - unit test coverage notes
+      - module risk summaries
+    outputs:
+      - unit coverage summary
+      - failed module report
+
+  specialized-check-agent:
+    role_prompt: roles/specialized-check-agent.md
+    canonical: ai/agents/specialized-check-agent.md
+    skill_mode: scoped_only
+    skills: []
+    context_includes:
+      - .rules/project.md
+      - tests/README.md
+      - specs/current/
+      - specs/changes/
+    owns:
+      - specialized verification notes
+      - smoke and contract results
+    outputs:
+      - specialized check results
+      - setup gap notes
+
+  reviewer:
+    role_prompt: roles/reviewer.md
+    canonical: ai/agents/reviewer.md
+    skill_mode: scoped_only
+    review_modes:
+      - implementation_gate
+      - final_gate
+    skills: []
+    context_includes:
+      - .rules/project.md
+      - specs/current/project-context.md
+      - specs/current/architecture-context.md
+      - specs/current/domain-context.md
+      - rules/
+      - tests/
+      - specs/
+    owns:
+      - review findings
+      - validation gaps
+      - release gate decisions
+    outputs:
+      - review findings
+      - implementation gate result
+      - final gate result
+
+  ci-editor:
+    role_prompt: roles/ci-editor.md
+    canonical: ai/agents/ci-editor.md
+    skill_mode: scoped_only
+    skills:
+      - name: team-ci-agent
+        path: .skills/team-ci-agent/SKILL.md
+        required: false
+        purpose: Git action readiness, staged scope validation, commit/PR/merge gates, and CI Record output.
+    context_includes:
+      - .rules/project.md
+      - rules/ci/spec-release-gates.md
+      - scripts/checks/README.md
+    owns:
+      - .github/workflows/
+      - scripts/checks/
+    outputs:
+      - release gate updates
+      - validation command notes
+
+  execution-editor:
+    role_prompt: roles/execution-editor.md
+    canonical: ai/agents/execution-editor.md
+    skill_mode: scoped_only
+    skills:
+      - name: cycling-agent-mvp-orchestration
+        path: /Users/liquiid/.codex/skills/cycling-agent-mvp-orchestration/SKILL.md
+        required: false
+        purpose: Canonical Hangzhou cycling-agent MVP orchestration model, backend role boundaries, identifier rules, and tool permissions.
+    context_includes:
+      - .rules/project.md
+      - ai/workflows/README.md
+      - scripts/README.md
+      - scripts/orchestration/README.md
+    owns:
+      - scripts/
+      - ai/workflows/
+    outputs:
+      - workflow wiring
+      - local command documentation

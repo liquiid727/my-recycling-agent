@@ -1,0 +1,187 @@
+# CN: 项目配置文件，声明工具、工作流、运行时或构建系统的可执行约定。
+# EN: Project configuration file declaring executable tool, workflow, runtime, or build conventions.
+
+id: spec-driven-default
+name: Spec Driven Default
+summary: Mixed orchestration workflow for request intake, change-package generation, execution routing, review gates, testing, promotion, and archive.
+workflow_kind: mixed-orchestration
+default_entry_role: spec-draft-agent
+request_classes:
+  - raw-requirement
+  - draft-only
+  - active-change
+  - implementation
+  - test
+  - review
+  - acceptance
+  - tooling
+change_states:
+  - drafted
+  - architected
+  - designed
+  - changed
+  - executing
+  - implementation-reviewed
+  - test-ready
+  - tested
+  - final-reviewed
+  - accepted
+  - promoted
+  - archived
+  - blocked
+review_results:
+  - pass
+  - warning
+  - blocked
+  - rejected
+execution_routes:
+  - route_key: frontend
+    description: User-facing or frontend code changes plus implementation-coupled frontend tests.
+    role: frontend-execution-agent
+  - route_key: backend
+    description: Backend or API code changes plus implementation-coupled backend tests.
+    role: backend-execution-agent
+  - route_key: migration
+    description: Schema, rollout, rollback, or data-compatibility work.
+    role: migration-execution-agent
+route_combinations:
+  - frontend
+  - backend
+  - migration
+  - frontend+backend
+  - backend+migration
+  - frontend+backend+migration
+stages:
+  - id: request-intake
+    owner: spec-draft-agent
+    enters_when: Every inbound request, including tooling or review-only requests.
+    outputs:
+      - request class
+      - structured draft or lightweight intake note
+      - change-id suggestion
+    success_state: drafted
+    failure_returns_to: spec-draft-agent
+  - id: draft-normalize
+    owner: spec-draft-agent
+    enters_when: Request classification requires draft shaping before change creation.
+    outputs:
+      - business goal
+      - scope and non-goals
+      - assumptions and open questions
+      - stable vocabulary
+    success_state: drafted
+    failure_returns_to: spec-draft-agent
+  - id: architecture-review
+    owner: architecture-agent
+    enters_when: Request is not tooling-only and needs system impact review.
+    outputs:
+      - architecture-review.md
+      - route recommendations
+      - migration and dependency risks
+    success_state: architected
+    failure_returns_to: spec-draft-agent
+  - id: ui-design-review
+    owner: ui-design-agent
+    optional: true
+    enters_when: Request affects frontend, interaction, user flow, or stateful UI behavior.
+    outputs:
+      - design-review.md
+      - UI state coverage notes
+    success_state: designed
+    failure_returns_to: spec-draft-agent
+  - id: spec-change-create
+    owner: spec-agent
+    enters_when: Draft and required review inputs are ready.
+    outputs:
+      - specs/changes/<change-id>/spec.md
+      - execution-plan.md
+      - changelog.md
+      - design-review.md or not-applicable marker
+    success_state: changed
+    failure_returns_to: spec-agent
+  - id: execution-routing
+    owner: architecture-agent
+    enters_when: Active change package exists.
+    outputs:
+      - routing-summary.json
+      - selected execution routes
+    success_state: changed
+    failure_returns_to: spec-agent
+  - id: implementation-execution
+    owner: frontend-execution-agent, backend-execution-agent, migration-execution-agent
+    enters_when: At least one execution route is selected.
+    outputs:
+      - implementation-report.frontend.md
+      - implementation-report.backend.md
+      - implementation-report.migration.md
+      - implementation-coupled validation evidence
+    success_state: executing
+    failure_returns_to: execution-routing
+  - id: implementation-review-gate
+    owner: reviewer
+    gate_mode: implementation_gate
+    enters_when: All selected execution tracks reported.
+    outputs:
+      - review-report.implementation.md
+      - review result
+    success_state: implementation-reviewed
+    failure_returns_to: implementation-execution
+  - id: independent-test-planning
+    owner: test-editor
+    enters_when: Implementation review passes or is explicitly waived to warning.
+    outputs:
+      - test-plan
+      - test-schedule
+      - independent test routing
+    success_state: test-ready
+    failure_returns_to: spec-agent
+  - id: independent-test-execution
+    owner: bruno-test-agent, e2e-test-agent, playwright-test-agent, specialized-check-agent
+    enters_when: Independent test plan exists.
+    outputs:
+      - independent verification assets
+      - normalized result summary
+      - blocked and flaky dependency notes
+    success_state: tested
+    failure_returns_to: test-editor
+  - id: final-review-gate
+    owner: reviewer
+    gate_mode: final_gate
+    enters_when: Implementation evidence and independent test results both exist.
+    outputs:
+      - review-report.final.md
+      - final review result
+    success_state: final-reviewed
+    failure_returns_to: spec-agent
+  - id: acceptance-promote-archive
+    owner: spec-agent
+    enters_when: Final review passes and required tests are pass or explicitly waived.
+    outputs:
+      - current promotion notes
+      - archived change handoff
+    success_state: archived
+    failure_returns_to: final-review-gate
+gates:
+  - id: architecture-gate
+    blocked_result: architecture-review cannot advance to spec-change-create
+    reroute_to: spec-draft-agent
+  - id: implementation-review-gate
+    blocked_result: Return only the failed execution tracks, do not reopen the change unless reviewer marks a spec gap.
+    reroute_to: implementation-execution
+  - id: independent-test-gate
+    blocked_result: Preserve normalized results and carry release blockers into final review.
+    reroute_to: test-editor
+  - id: final-review-gate
+    blocked_result: Do not promote current state. Route back to spec-agent, execution agents, or test-editor based on evidence.
+    reroute_to: spec-agent
+  - id: acceptance-gate
+    requires:
+      - implementation review pass
+      - final review pass
+      - required tests pass or explicitly waived
+      - complete change traceability
+steps:
+  - id: validate-spec-driven-lifecycle
+    run: "node scripts/checks/validate-spec-driven-lifecycle.mjs"
+  - id: announce-ready-workflow
+    run: "node -e \"console.log('spec-driven-lifecycle-ready')\""

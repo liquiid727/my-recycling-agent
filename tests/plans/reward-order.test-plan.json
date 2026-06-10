@@ -1,0 +1,73 @@
+{
+  "specId": "reward-order",
+  "specVersion": "1.2.0",
+  "featureName": "奖励订单发放",
+  "source": "accepted-spec",
+  "flows": [
+    {
+      "name": "奖励领取业务流",
+      "stages": [
+        {
+          "name": "进入场景",
+          "scenarioNames": ["用户成功领取奖励", "库存不足时领取失败"],
+          "stepNames": ["打开奖励页"]
+        },
+        {
+          "name": "触发动作",
+          "scenarioNames": ["用户成功领取奖励", "库存不足时领取失败"],
+          "stepNames": ["点击领取"]
+        },
+        {
+          "name": "提交请求",
+          "scenarioNames": ["用户成功领取奖励", "库存不足时领取失败"],
+          "stepNames": ["提交订单"]
+        },
+        {
+          "name": "确认结果",
+          "scenarioNames": ["用户成功领取奖励", "库存不足时领取失败"],
+          "stepNames": ["查看结果", "查看失败提示"]
+        }
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "name": "创建奖励订单",
+      "method": "POST",
+      "path": "/api/reward-orders",
+      "priority": "P0",
+      "branches": ["happy", "error", "limit", "flow"],
+      "preconditions": ["用户已登录", "奖励库存已同步"],
+      "expectedResults": ["创建成功返回订单号", "库存不足返回稳定错误码"],
+      "relatedRule": "reward.order.create"
+    },
+    {
+      "name": "查询奖励订单",
+      "method": "GET",
+      "path": "/api/reward-orders/:id",
+      "priority": "P1",
+      "branches": ["happy", "error", "edge"],
+      "preconditions": ["订单号存在或不存在"],
+      "expectedResults": ["存在时返回详情", "无权限时拒绝访问"],
+      "relatedRule": "reward.order.read"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "用户成功领取奖励",
+      "priority": "P0",
+      "branches": ["happy", "flow"],
+      "preconditions": ["奖励可领", "用户有资格"],
+      "expectedResults": ["订单创建成功", "发奖完成并可查询"],
+      "steps": ["打开奖励页", "点击领取", "提交订单", "查看结果"]
+    },
+    {
+      "name": "库存不足时领取失败",
+      "priority": "P0",
+      "branches": ["error", "limit"],
+      "preconditions": ["奖励库存为 0"],
+      "expectedResults": ["前端展示库存不足", "后端返回稳定错误码"],
+      "steps": ["打开奖励页", "点击领取", "提交订单", "查看失败提示"]
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+[
+  {
+    "trip_no": "TRIP-HZ-RIVER-CAFE",
+    "city_code": "hangzhou",
+    "route_template_id": "HZ-RIVER-001",
+    "destination_no": "DST-HZ-RIVER-CAFE",
+    "name": "钱塘江沿线亲水骑 + 江边咖啡",
+    "origin_region_tags": ["滨江", "钱塘江"],
+    "total_duration_hours": 4.5,
+    "ride_duration_hours": 2.8,
+    "trip_style_tags": ["half_day", "江边", "亲水", "咖啡", "relaxed", "scenic"],
+    "return_mode_options": ["骑回", "缩短骑回", "地铁 6 号线公共交通返程"],
+    "fallback_plan": "天气转差或体感下降时缩短到奥体中途折返，必要时从奥体中心站公共交通返程。",
+    "status": "active"
+  },
+  {
+    "trip_no": "TRIP-HZ-XIANGHU-HALF",
+    "city_code": "hangzhou",
+    "route_template_id": "HZ-LEISURE-003",
+    "destination_no": "DST-HZ-XIANGHU",
+    "name": "湘湖半日休闲骑",
+    "origin_region_tags": ["湘湖", "萧山", "滨江"],
+    "total_duration_hours": 4.25,
+    "ride_duration_hours": 2.4,
+    "trip_style_tags": ["half_day", "湖区", "公园", "relaxed", "leisure"],
+    "return_mode_options": ["骑回", "地铁 1 号线湘湖站返程"],
+    "fallback_plan": "遇到高温或拥挤时只骑半圈，在游客中心提前结束。",
+    "status": "active"
+  },
+  {
+    "trip_no": "TRIP-HZ-LONGJING-TEA",
+    "city_code": "hangzhou",
+    "route_template_id": "HZ-HILL-002",
+    "destination_no": "DST-HZ-LONGJING",
+    "name": "龙井轻爬坡 + 茶村停留",
+    "origin_region_tags": ["西湖", "龙井"],
+    "total_duration_hours": 5.0,
+    "ride_duration_hours": 3.2,
+    "trip_style_tags": ["half_day", "轻爬坡", "茶村", "scenic", "climb"],
+    "return_mode_options": ["骑回", "九溪方向下撤", "公共交通接驳返程"],
+    "fallback_plan": "节假日或高温时只完成龙井上坡段，茶村短停后从九溪方向下撤。",
+    "status": "active"
+  },
+  {
+    "trip_no": "TRIP-HZ-LIANGZHU-DAY",
+    "city_code": "hangzhou",
+    "route_template_id": "HZ-SUBURB-005",
+    "destination_no": "DST-HZ-LIANGZHU",
+    "name": "良渚 / 余杭方向一日轻郊游",
+    "origin_region_tags": ["余杭", "良渚"],
+    "total_duration_hours": 7.0,
+    "ride_duration_hours": 4.2,
+    "trip_style_tags": ["one_day", "轻郊游", "观景", "explore", "scenic"],
+    "return_mode_options": ["骑回", "良渚地铁站公共交通返程", "中段乡村驿站折返"],
+    "fallback_plan": "如果午后天气或体力不稳，在中段乡村驿站折返，不进入更远乡道。",
+    "status": "active"
+  },
+  {
+    "trip_no": "TRIP-HZ-QIANDAOHU-2D",
+    "city_code": "hangzhou",
+    "route_template_id": "HZ-SUBURB-005",
+    "destination_no": "DST-HZ-QIANDAOHU",
+    "name": "千岛湖两日周末骑行计划",
+    "origin_region_tags": ["滨江", "余杭", "杭州", "钱塘江"],
+    "total_duration_hours": 30.0,
+    "ride_duration_hours": 8.5,
+    "duration_bucket": "two_day",
+    "itinerary_days": [
+      { "day": 1, "title": "杭州出发与湖区接驳骑", "ride_hours": 4.5, "notes": "控制强度，优先完成到达和住宿确认。" },
+      { "day": 2, "title": "湖区风景骑与返程", "ride_hours": 4.0, "notes": "上午完成主要风景段，午后按天气选择高铁或缩短返程。" }
+    ],
+    "trip_style_tags": ["two_day", "千岛湖", "湖区", "周末", "过夜", "scenic"],
+    "return_mode_options": ["高铁返杭", "缩短骑行后公共交通返程", "天气稳定时增加湖区短环线"],
+    "lodging_plan": "住中心湖区或千岛湖镇附近，优先选择可安全停放自行车的酒店。",
+    "equipment_advice": ["两日换洗骑行服", "前后车灯", "轻量雨衣", "补胎工具", "充电宝"],
+    "weather_window_notes": "需要连续两天低降雨窗口；若第二天降雨概率升高，改成短骑 + 高铁返杭。",
+    "fallback_plan": "如果天气转差，取消第二天湖区延展，只保留返程前短距离骑行。",
+    "status": "active"
+  },
+  {
+    "trip_no": "TRIP-HZ-HUZHOU-3D",
+    "city_code": "hangzhou",
+    "route_template_id": "HZ-SUBURB-005",
+    "destination_no": "DST-HZ-HUZHOU",
+    "name": "湖州太湖方向三日轻出行",
+    "origin_region_tags": ["滨江", "余杭", "杭州"],
+    "total_duration_hours": 54.0,
+    "ride_duration_hours": 12.0,
+    "duration_bucket": "three_day",
+    "itinerary_days": [
+      { "day": 1, "title": "杭州出发到湖州方向", "ride_hours": 4.0, "notes": "以到达首晚住宿点为主，不追求强度。" },
+      { "day": 2, "title": "太湖沿线亲水骑", "ride_hours": 5.0, "notes": "安排主要风景段和午间补给。" },
+      { "day": 3, "title": "轻松收尾与返杭", "ride_hours": 3.0, "notes": "上午短骑，午后公共交通返杭。" }
+    ],
+    "trip_style_tags": ["three_day", "湖州", "太湖", "周末", "过夜", "亲水"],
+    "return_mode_options": ["高铁湖州站返杭", "分段公共交通接驳", "天气稳定时保留短环线"],
+    "lodging_plan": "第一晚住湖州城区，第二晚住太湖沿线成熟住宿点。",
+    "equipment_advice": ["三日换洗衣物", "雨具", "备用内胎", "移动电源", "轻量保暖层"],
+    "weather_window_notes": "三日计划必须看连续天气窗口；若只有两天稳定天气，降级为千岛湖两日或市区短骑。",
+    "fallback_plan": "如第二天大风或降雨，取消太湖延展段，改为城区短骑后高铁返杭。",
+    "status": "active"
+  }
+]

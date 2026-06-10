@@ -1,0 +1,217 @@
+[
+  {
+    "route_code": "HZ-RIVER-001",
+    "name": "滨江-钱塘江休闲往返线",
+    "city_code": "hangzhou",
+    "start_point_name": "闻涛路滨江段",
+    "start_point_lng": 120.2103,
+    "start_point_lat": 30.2064,
+    "end_point_name": "钱塘江南岸观景折返点",
+    "loop_type": "out_and_back",
+    "district_tags": ["滨江", "钱塘江"],
+    "ride_style_tags": ["relaxed", "scenic", "weekend"],
+    "season_tags": ["spring", "autumn", "winter"],
+    "distance_km": 42,
+    "elevation_gain_m": 180,
+    "estimated_duration_hours": 2.8,
+    "difficulty_level": "easy",
+    "best_time_slots": ["06:30-09:30", "16:30-18:30"],
+    "avoid_time_slots": ["11:00-15:00"],
+    "surface_type": "greenway",
+    "traffic_level": "low",
+    "supply_score": 8,
+    "return_difficulty_score": 3,
+    "scenic_score": 8,
+    "training_score": 4,
+    "beginner_friendly": true,
+    "climb_segments": [],
+    "supply_points": [
+      { "name": "闻涛路便利店", "km_mark": 4, "type": "便利店" },
+      { "name": "奥体观景平台补水点", "km_mark": 18, "type": "补水点" }
+    ],
+    "bailout_options": [
+      { "name": "奥体中途折返", "km_mark": 18, "reason": "保留江景主段，返程最稳" },
+      { "name": "复兴大桥前结束", "km_mark": 26, "reason": "体感不佳时可缩短后段" }
+    ],
+    "holiday_penalty_level": "medium",
+    "weather_sensitivity": {
+      "heat": "medium",
+      "rain": "medium",
+      "crosswind": "medium"
+    },
+    "route_notes": "适合周末晨骑，风景稳定，整体节奏轻松。"
+  },
+  {
+    "route_code": "HZ-HILL-002",
+    "name": "西湖-龙井轻爬坡体验线",
+    "city_code": "hangzhou",
+    "start_point_name": "杨公堤南口",
+    "start_point_lng": 120.1378,
+    "start_point_lat": 30.2417,
+    "end_point_name": "龙井村环线终点",
+    "loop_type": "loop",
+    "district_tags": ["西湖", "龙井"],
+    "ride_style_tags": ["climb", "scenic", "half_day"],
+    "season_tags": ["spring", "autumn"],
+    "distance_km": 36,
+    "elevation_gain_m": 520,
+    "estimated_duration_hours": 3.2,
+    "difficulty_level": "medium",
+    "best_time_slots": ["06:00-08:30"],
+    "avoid_time_slots": ["09:30-17:00", "节假日全天"],
+    "surface_type": "asphalt",
+    "traffic_level": "medium",
+    "supply_score": 6,
+    "return_difficulty_score": 5,
+    "scenic_score": 9,
+    "training_score": 7,
+    "beginner_friendly": false,
+    "climb_segments": [
+      { "name": "龙井上坡段", "distance_km": 3.8, "elevation_gain_m": 210, "gradient_note": "前缓后陡" },
+      { "name": "梅家坞回程起伏段", "distance_km": 4.6, "elevation_gain_m": 120, "gradient_note": "连续起伏" }
+    ],
+    "supply_points": [
+      { "name": "龙井村入口补给店", "km_mark": 16, "type": "便利店" },
+      { "name": "梅家坞茶村水站", "km_mark": 22, "type": "补水点" }
+    ],
+    "bailout_options": [
+      { "name": "龙井村顶折返", "km_mark": 17, "reason": "保留主爬坡体验，减少后段暴晒" },
+      { "name": "九溪方向下撤", "km_mark": 25, "reason": "体力不够时更快回城" }
+    ],
+    "holiday_penalty_level": "high",
+    "weather_sensitivity": {
+      "heat": "high",
+      "rain": "high",
+      "crosswind": "low"
+    },
+    "route_notes": "景观好，但游客与机动车干扰更明显，更适合早骑。"
+  },
+  {
+    "route_code": "HZ-LEISURE-003",
+    "name": "湘湖半日郊游线",
+    "city_code": "hangzhou",
+    "start_point_name": "湘湖游客中心",
+    "start_point_lng": 120.2525,
+    "start_point_lat": 30.1545,
+    "end_point_name": "湘湖环湖终点",
+    "loop_type": "loop",
+    "district_tags": ["湘湖", "萧山"],
+    "ride_style_tags": ["relaxed", "half_day", "leisure"],
+    "season_tags": ["spring", "autumn", "winter"],
+    "distance_km": 30,
+    "elevation_gain_m": 210,
+    "estimated_duration_hours": 2.4,
+    "difficulty_level": "easy",
+    "best_time_slots": ["07:00-10:00", "15:30-18:00"],
+    "avoid_time_slots": ["12:00-15:00"],
+    "surface_type": "greenway",
+    "traffic_level": "low",
+    "supply_score": 7,
+    "return_difficulty_score": 2,
+    "scenic_score": 8,
+    "training_score": 3,
+    "beginner_friendly": true,
+    "climb_segments": [
+      { "name": "湘湖东岸起伏段", "distance_km": 2.4, "elevation_gain_m": 70, "gradient_note": "短坡为主" }
+    ],
+    "supply_points": [
+      { "name": "湘湖游客中心便利店", "km_mark": 2, "type": "便利店" },
+      { "name": "湖山广场咖啡补给点", "km_mark": 15, "type": "咖啡店" }
+    ],
+    "bailout_options": [
+      { "name": "环湖半圈提前结束", "km_mark": 14, "reason": "适合带新手或天气闷热时缩短" }
+    ],
+    "holiday_penalty_level": "medium",
+    "weather_sensitivity": {
+      "heat": "medium",
+      "rain": "medium",
+      "crosswind": "low"
+    },
+    "route_notes": "适合新手和情侣向休闲骑，骑后可衔接吃饭休息。"
+  },
+  {
+    "route_code": "HZ-LOOP-004",
+    "name": "滨江晨骑刷圈线",
+    "city_code": "hangzhou",
+    "start_point_name": "奥体印象城外广场",
+    "start_point_lng": 120.2251,
+    "start_point_lat": 30.2288,
+    "end_point_name": "奥体印象城外广场",
+    "loop_type": "loop",
+    "district_tags": ["滨江"],
+    "ride_style_tags": ["training", "loop", "morning"],
+    "season_tags": ["spring", "summer", "autumn"],
+    "distance_km": 24,
+    "elevation_gain_m": 110,
+    "estimated_duration_hours": 1.8,
+    "difficulty_level": "easy",
+    "best_time_slots": ["05:45-08:00"],
+    "avoid_time_slots": ["08:30-10:30", "17:00-19:30"],
+    "surface_type": "asphalt",
+    "traffic_level": "low",
+    "supply_score": 7,
+    "return_difficulty_score": 1,
+    "scenic_score": 6,
+    "training_score": 8,
+    "beginner_friendly": true,
+    "climb_segments": [],
+    "supply_points": [
+      { "name": "奥体起点补给店", "km_mark": 1, "type": "便利店" },
+      { "name": "闻涛路中段自动售卖机", "km_mark": 12, "type": "补水点" }
+    ],
+    "bailout_options": [
+      { "name": "单圈结束", "km_mark": 12, "reason": "控时训练时可以只做一圈" }
+    ],
+    "holiday_penalty_level": "low",
+    "weather_sensitivity": {
+      "heat": "low",
+      "rain": "low",
+      "crosswind": "medium"
+    },
+    "route_notes": "适合工作日前后做轻量刷圈和控时训练。"
+  },
+  {
+    "route_code": "HZ-SUBURB-005",
+    "name": "余杭轻郊野线",
+    "city_code": "hangzhou",
+    "start_point_name": "余杭良渚文化村口",
+    "start_point_lng": 120.0451,
+    "start_point_lat": 30.3721,
+    "end_point_name": "余杭良渚文化村口",
+    "loop_type": "loop",
+    "district_tags": ["余杭"],
+    "ride_style_tags": ["scenic", "half_day", "explore"],
+    "season_tags": ["spring", "autumn"],
+    "distance_km": 48,
+    "elevation_gain_m": 420,
+    "estimated_duration_hours": 4.2,
+    "difficulty_level": "medium",
+    "best_time_slots": ["06:30-09:00"],
+    "avoid_time_slots": ["13:00-16:00"],
+    "surface_type": "mixed",
+    "traffic_level": "medium",
+    "supply_score": 5,
+    "return_difficulty_score": 4,
+    "scenic_score": 8,
+    "training_score": 6,
+    "beginner_friendly": false,
+    "climb_segments": [
+      { "name": "山前进村缓坡", "distance_km": 5.2, "elevation_gain_m": 160, "gradient_note": "缓坡拉扯" },
+      { "name": "回程丘陵段", "distance_km": 4.1, "elevation_gain_m": 110, "gradient_note": "短坡频繁" }
+    ],
+    "supply_points": [
+      { "name": "良渚村口便利店", "km_mark": 3, "type": "便利店" },
+      { "name": "中段乡村驿站", "km_mark": 27, "type": "补水点" }
+    ],
+    "bailout_options": [
+      { "name": "中段乡村驿站折返", "km_mark": 27, "reason": "高温或爆胎时便于原路返回" }
+    ],
+    "holiday_penalty_level": "medium",
+    "weather_sensitivity": {
+      "heat": "high",
+      "rain": "medium",
+      "crosswind": "low"
+    },
+    "route_notes": "适合周末探索，节假日午后和高温天体验会明显下降。"
+  }
+]

@@ -1,0 +1,28 @@
+# CN: 项目配置文件，声明工具、工作流、运行时或构建系统的可执行约定。
+# EN: Project configuration file declaring executable tool, workflow, runtime, or build conventions.
+
+workflow: test-console-v1
+purpose: accepted spec -> test plan -> execution -> normalized result -> report ui
+
+inputs:
+  - accepted_spec
+  - spec_id
+  - spec_version
+  - run_scope
+
+steps:
+  - derive_test_plan
+  - generate_api_and_scenario_assets
+  - run_selected_tests
+  - normalize_results
+  - publish_to_test_console
+
+outputs:
+  - tests/plans/<spec>.test-plan.json
+  - tests/results/<spec>.<run_id>.json
+  - test-console overview and detail pages
+
+gates:
+  - accepted_spec_required
+  - normalized_result_required
+  - release_decision_visible
