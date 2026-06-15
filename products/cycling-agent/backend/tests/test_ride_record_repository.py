@@ -342,6 +342,26 @@ def test_ride_monthly_summary_response_schema_enforces_contract() -> None:
     assert response.summary.month == "2026-06"
     assert response.summary.recommended_action.action_key == "maintain_weekly_rhythm"
 
+    action_json_schema = action_schema.model_json_schema()
+    payload_json_schema = payload_schema.model_json_schema()
+
+    assert action_json_schema["properties"]["action_key"]["enum"] == [
+        "schedule_easy_city_ride",
+        "resume_with_short_ride",
+        "maintain_weekly_rhythm",
+        "take_recovery_window",
+    ]
+    assert action_json_schema["properties"]["suggested_scene"]["enum"] == [
+        "city_ride",
+        "weekend_trip",
+    ]
+    assert payload_json_schema["properties"]["habit_status"]["enum"] == [
+        "starting",
+        "rebuilding",
+        "steady",
+        "overreaching",
+    ]
+
     with pytest.raises(ValidationError):
         payload_schema.model_validate(
             {
