@@ -497,7 +497,7 @@ def _apply_compatible_migrations(connection, database_url: str) -> None:
             ("notes", "TEXT"),
             ("tags_json", "TEXT"),
             ("payload_json", "TEXT NOT NULL DEFAULT '{}'"),
-            ("updated_at", "TEXT DEFAULT CURRENT_TIMESTAMP"),
+            ("updated_at", "TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP"),
         ],
         "ride_requests": [
             ("id", "TEXT"),

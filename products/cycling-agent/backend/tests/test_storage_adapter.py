@@ -5,6 +5,7 @@ EN: Backend test file covering APIs, services, repositories, providers, cache, a
 import sys
 import types
 
+from app.core import storage as storage_module
 from app.core.storage import _translate_query_for_postgres, connect, database_kind, init_storage
 from app.repositories.ride_record_repository import save_ride_record
 
@@ -86,6 +87,49 @@ def test_init_storage_runs_postgres_ddl(monkeypatch) -> None:
     assert "start_point TEXT" in ride_records_ddl
     assert "payload_json TEXT NOT NULL" in ride_records_ddl
     assert "updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP" in ride_records_ddl
+
+
+def test_init_storage_uses_postgres_timestamp_type_for_legacy_ride_record_updated_at(monkeypatch) -> None:
+    fake_connection = FakeConnection()
+    fake_psycopg = types.SimpleNamespace(connect=lambda *args, **kwargs: fake_connection)
+    fake_rows = types.SimpleNamespace(dict_row="dict_row")
+    monkeypatch.setitem(sys.modules, "psycopg", fake_psycopg)
+    monkeypatch.setitem(sys.modules, "psycopg.rows", fake_rows)
+
+    existing_ride_record_columns = {
+        "entry_mode",
+        "source_request_no",
+        "ride_date",
+        "intent",
+        "plan_kind",
+        "route_code",
+        "route_title",
+        "destination_name",
+        "start_point",
+        "origin_region",
+        "completion_status",
+        "actual_duration_hours",
+        "actual_distance_km",
+        "effort_feeling",
+        "mood_after",
+        "notes",
+        "tags_json",
+        "payload_json",
+    }
+
+    def fake_list_columns(connection, database_url: str, table_name: str) -> set[str]:
+        if table_name == "ride_records":
+            return existing_ride_record_columns
+        return {"id", "route_no", "status", "route_source", "entity_id", "config_no"}
+
+    monkeypatch.setattr(storage_module, "_list_columns", fake_list_columns)
+
+    init_storage("postgresql://user:pass@localhost:5432/cycling_agent")
+
+    assert (
+        "ALTER TABLE ride_records ADD COLUMN updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP",
+        (),
+    ) in fake_connection.cursor_obj.executed
 
 
 def test_ride_record_repository_uses_postgres_adapter_for_save(monkeypatch) -> None:
