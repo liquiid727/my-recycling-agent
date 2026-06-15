@@ -1,0 +1,24 @@
+{
+  "selectedRoutes": ["backend", "frontend", "docs"],
+  "executionMode": "test-after-execution",
+  "reasoning": [
+    "Package 2 spans backend persistence and aggregation plus frontend /rides surfaces.",
+    "The docs package needs to stay aligned with implemented package 2a and 2b behavior.",
+    "Git write restrictions prevent clean commit-based phase boundaries, so evidence must stay explicit in the change package."
+  ],
+  "handoffArtifacts": [
+    "docs/superpowers/specs/2026-06-15-package-2a-post-ride-record-and-summary-design.md",
+    "docs/superpowers/specs/2026-06-15-package-2b-habit-monthly-summary-design.md",
+    "docs/superpowers/plans/2026-06-15-package-2a-post-ride-record-and-summary.md",
+    "docs/superpowers/plans/2026-06-15-package-2b-habit-monthly-summary.md",
+    "specs/changes/cycling-agent-package-2-ride-review-loop/spec.md"
+  ],
+  "gates": [
+    "backend targeted pytest green",
+    "frontend targeted vitest green",
+    "frontend build green",
+    "runtime readback for monthly summary endpoint",
+    "runtime readback for summary event endpoint",
+    "git worktree write permissions restored before clean handoff"
+  ]
+}

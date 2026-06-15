@@ -1,0 +1,21 @@
+{
+  "selectedRoutes": ["backend", "frontend", "docs"],
+  "executionMode": "test-after-execution",
+  "reasoning": [
+    "Package 2c spans one new backend read model and one new /rides UI panel.",
+    "The feature remains additive and should reuse package 2a and 2b surfaces.",
+    "The docs route is required because package 2c extends the same ride-review loop and should stay traceable."
+  ],
+  "handoffArtifacts": [
+    "docs/superpowers/specs/2026-06-15-package-2c-growth-review-design.md",
+    "docs/superpowers/plans/2026-06-15-package-2c-growth-review.md",
+    "specs/changes/cycling-agent-package-2c-growth-review/spec.md"
+  ],
+  "gates": [
+    "backend growth-review tests green",
+    "frontend growth-panel tests green",
+    "frontend build green",
+    "runtime readback for growth-review endpoint",
+    "final review report recorded"
+  ]
+}

@@ -11,6 +11,7 @@ import {
   createRidePlan,
   createRidePlanStream,
   InputMode,
+  PlannerHandoffContext,
   PlannerRequest,
   PlannerStageUpdate,
   RideIntent,
@@ -30,6 +31,7 @@ type PlannerState = {
   inputMode: InputMode;
   targetDate: string;
   structuredConstraints: StructuredConstraints;
+  handoffContext: PlannerHandoffContext | null;
   slotState: Record<string, unknown>;
   quickReplies: string[];
   clarificationPrompt: string | null;
@@ -85,6 +87,7 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
       destination_preferences: ["江边", "咖啡"],
       return_preference: "ride_back"
     },
+    handoffContext: null,
     slotState: {},
     quickReplies: DEFAULT_QUICK_REPLIES.ride_today,
     clarificationPrompt: null,
@@ -166,14 +169,15 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
           messages: [...current.messages, buildMessage("assistant", chatTurn.assistant_message)],
           loadingLabel: chatTurn.ui_hints?.planning_status_label ?? "我在看天气和路线难度"
         }));
-        const result = await createRidePlanStream(chatTurn.planner_request, userProfile, {
+        const plannerRequest = withHandoffContext(chatTurn.planner_request as PlannerRequest, state.handoffContext);
+        const result = await createRidePlanStream(plannerRequest, userProfile, {
           onStage: (stage) => {
             setState((current) => ({
               ...current,
               stageUpdates: [...current.stageUpdates, stage]
             }));
           }
-        }).catch(async () => createRidePlan(chatTurn.planner_request as PlannerRequest, userProfile));
+        }).catch(async () => createRidePlan(plannerRequest, userProfile));
         setState((current) => ({
           ...current,
           loading: false,
@@ -267,6 +271,10 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
     }));
   }
 
+  function setHandoffContext(handoffContext: PlannerHandoffContext | null) {
+    setState((current) => ({ ...current, handoffContext }));
+  }
+
   function detectOriginLocation() {
     if (!navigator.geolocation) {
       setState((current) => ({ ...current, error: "当前浏览器不支持定位，请手动输入出发点。" }));
@@ -302,6 +310,7 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
     setIntent,
     setTargetDate,
     setStructuredField,
+    setHandoffContext,
     detectOriginLocation,
     setQueryFromQuickReply: setQuery,
     submit
@@ -338,8 +347,16 @@ function buildPlannerRequest(state: PlannerState): PlannerRequest {
     planning_mode: state.planningMode,
     planning_scene: state.planningScene,
     input_mode: state.inputMode,
-    structured_constraints: state.inputMode === "structured" ? state.structuredConstraints : undefined
+    structured_constraints: state.inputMode === "structured" ? state.structuredConstraints : undefined,
+    handoff_context: state.handoffContext ?? undefined,
   };
+}
+
+function withHandoffContext(request: PlannerRequest, handoffContext: PlannerHandoffContext | null): PlannerRequest {
+  if (!handoffContext) {
+    return request;
+  }
+  return { ...request, handoff_context: handoffContext };
 }
 
 function buildNaturalConversationQuery(state: PlannerState): string {

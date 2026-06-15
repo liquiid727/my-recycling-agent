@@ -211,3 +211,66 @@ export CYCLING_AGENT_REDIS_URL=redis://127.0.0.1:63799/0
 12. 验证页面提示 `手动补录至少填写路线标题或目的地。`
 13. 填写一条手动记录后再次保存
 14. 验证手动记录也能进入详情页，且 `source_request_no` 不会被错误带入
+
+## Scenario 16: 月度骑行总结与回流规划
+
+1. 先完成至少 2 条本月骑行记录，其中至少 1 条为实际完成或缩短
+2. 打开 `/rides`
+3. 验证页面先显示“本月骑行总结”加载态，再展示 summary band
+4. 验证 summary band 至少包含：
+   - 当前查看月份
+   - 本月记录数 / 骑行日数
+   - 总距离 / 总时长
+   - 连续周数
+   - 当前 `habit_status`
+   - 一条 `next_action`
+5. 将月份切换到上个月
+6. 验证页面只刷新 summary band，不影响最近记录列表的展示
+7. 点击 `按这个建议去规划`
+8. 验证跳回 `/`
+9. 验证首页出现一条 planner handoff 提示，至少包含来源、状态或连续周数
+10. 验证首页 intent 与输入框被新的建议文案 seed，且表单规划里能看到被带入的区域 / 时长
+11. 在首页直接点击 `开始规划`
+12. 验证新一轮规划仍走原有 planner 主链，没有进入空白页或错误态
+13. 如可查看请求体或审计，验证 planner 请求里包含 handoff context
+14. 打开 `GET /api/v1/admin/ride-monthly-summary-events`
+15. 验证最近事件里至少包含：
+   - 一条 `summary_request`
+   - 点击 CTA 后的一条 `cta_click`
+16. 请求非法月份，如 `GET /api/v1/rides/monthly-summary?month=2026-6`
+17. 再次打开后台事件列表，验证出现 `invalid_month`
+
+## Scenario 17: 增长回顾与窗口切换
+
+1. 先保证近 90 天内至少有 3 条非 `cancelled` 骑行记录，且最好分布在最近 30 天和更早窗口里
+2. 打开 `/rides`
+3. 验证页面会独立显示“增长回顾”加载态
+4. 验证增长面板成功后至少包含：
+   - 当前滚动窗口
+   - `growth_status`
+   - `review_headline`
+   - `review_body`
+   - 最长距离 / 连续周数 / 活跃月份
+   - 至少一条 milestone
+   - 一条 `next_focus`
+5. 点击 `近 180 天`
+6. 验证只刷新增长面板，不影响月度总结或最近记录列表
+7. 打开 `GET /api/v1/rides/growth-review?window_days=180`
+8. 验证返回体包含：
+   - `ride_growth_review`
+   - `growth_status`
+   - `milestones`
+   - `recent_vs_previous_ride_delta`
+9. 点击增长面板里的 `按这个方向继续安排` 或对应 CTA
+10. 验证跳回 `/`
+11. 验证首页出现一条 planner handoff 提示，至少包含来源、状态或连续周数
+12. 验证首页 intent 与输入框被 growth review 的建议文案 seed，且表单规划里能看到被带入的区域 / 时长
+13. 打开 `GET /api/v1/admin/ride-monthly-summary-events`
+14. 验证最近事件里至少包含：
+   - 一条 `growth_review_request`
+   - 点击 CTA 后的一条 `growth_review_cta_click`
+   - `requested_window_days`
+   - `growth_status`
+15. 请求非法窗口，如 `GET /api/v1/rides/growth-review?window_days=45`
+16. 再次打开后台事件列表，验证出现 `growth_review_invalid_window`
+17. 如当前窗口没有实际骑行，验证对应 `growth_review_request` 事件里 `is_zero_growth_review=true`

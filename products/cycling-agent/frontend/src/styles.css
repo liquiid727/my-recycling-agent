@@ -451,6 +451,64 @@ h1 {
   flex-wrap: wrap;
 }
 
+.summary-band {
+  margin-bottom: 18px;
+}
+
+.month-toolbar {
+  display: grid;
+  gap: 14px;
+}
+
+.review-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.month-toolbar .field-label {
+  margin-bottom: 0;
+  max-width: 220px;
+}
+
+.growth-review-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.milestone-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.milestone-item {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+
+.milestone-item strong {
+  color: var(--text);
+}
+
+.milestone-item span {
+  color: var(--muted);
+}
+
+.inline-note {
+  color: var(--subtle);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .primary-button {
   min-height: 46px;
   padding: 0 22px;

@@ -191,6 +191,24 @@ def _sqlite_statements() -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS ride_monthly_summary_events (
+            event_no TEXT PRIMARY KEY,
+            event_type TEXT NOT NULL,
+            requested_month TEXT,
+            requested_window_days INTEGER,
+            suggested_scene TEXT,
+            is_empty_summary INTEGER,
+            is_zero_growth_review INTEGER,
+            has_planned_rides INTEGER,
+            habit_status TEXT,
+            growth_status TEXT,
+            has_milestones INTEGER,
+            next_action_key TEXT,
+            source TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS ride_requests (
             id TEXT,
             request_no TEXT PRIMARY KEY,
@@ -369,6 +387,24 @@ def _postgres_statements() -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS ride_monthly_summary_events (
+            event_no TEXT PRIMARY KEY,
+            event_type TEXT NOT NULL,
+            requested_month TEXT,
+            requested_window_days INTEGER,
+            suggested_scene TEXT,
+            is_empty_summary BOOLEAN,
+            is_zero_growth_review BOOLEAN,
+            has_planned_rides BOOLEAN,
+            habit_status TEXT,
+            growth_status TEXT,
+            has_milestones BOOLEAN,
+            next_action_key TEXT,
+            source TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS ride_requests (
             id TEXT,
             request_no TEXT PRIMARY KEY,
@@ -498,6 +534,12 @@ def _apply_compatible_migrations(connection, database_url: str) -> None:
             ("tags_json", "TEXT"),
             ("payload_json", "TEXT NOT NULL DEFAULT '{}'"),
             ("updated_at", "TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP"),
+        ],
+        "ride_monthly_summary_events": [
+            ("requested_window_days", "INTEGER"),
+            ("is_zero_growth_review", "BOOLEAN"),
+            ("growth_status", "TEXT"),
+            ("has_milestones", "BOOLEAN"),
         ],
         "ride_requests": [
             ("id", "TEXT"),

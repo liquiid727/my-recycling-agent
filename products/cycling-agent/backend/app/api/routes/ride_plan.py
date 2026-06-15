@@ -184,7 +184,22 @@ def _parse_payload_constraints(payload: RidePlanRequestSchema) -> dict:
             parsed_constraints=parsed,
         )
     )
-    return parsed
+    return _merge_handoff_context(payload, parsed)
+
+
+def _merge_handoff_context(payload: RidePlanRequestSchema, parsed_constraints: dict) -> dict:
+    if payload.handoff_context is None:
+        return parsed_constraints
+
+    handoff = payload.handoff_context
+    merged = dict(parsed_constraints)
+    if handoff.origin_region and not merged.get("origin_region"):
+        merged["origin_region"] = handoff.origin_region
+    if handoff.suggested_duration_hours and not merged.get("available_hours"):
+        merged["available_hours"] = handoff.suggested_duration_hours
+    if handoff.suggested_scene == "weekend_trip" and not merged.get("duration_bucket"):
+        merged["duration_bucket"] = "half_day"
+    return merged
 
 
 def _format_sse(event_name: str, payload: dict) -> str:

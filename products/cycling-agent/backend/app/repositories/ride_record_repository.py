@@ -113,7 +113,7 @@ def list_ride_records_by_date_range(
 ) -> list[dict[str, Any]]:
     return _list_ride_records(
         database_url,
-        where_clause="WHERE ride_date >= ? AND ride_date < ?",
+        where_clause="WHERE ride_date >= ? AND ride_date <= ?",
         params=(_normalize_date_like(start_date), _normalize_date_like(end_date)),
         suffix="ORDER BY ride_date DESC, ride_record_no DESC",
     )
@@ -126,16 +126,37 @@ def list_recent_non_cancelled_ride_records(
     lookback_days: int,
     limit: int,
 ) -> list[dict[str, Any]]:
-    start_date = before_date - timedelta(days=lookback_days)
+    start_date = before_date - timedelta(days=max(lookback_days - 1, 0))
     return _list_ride_records(
         database_url,
         where_clause="""
             WHERE ride_date >= ?
-              AND ride_date < ?
+              AND ride_date <= ?
               AND completion_status != ?
         """,
         params=(
             _normalize_date_like(start_date),
+            _normalize_date_like(before_date),
+            "cancelled",
+            limit,
+        ),
+        suffix="ORDER BY ride_date DESC, ride_record_no DESC LIMIT ?",
+    )
+
+
+def list_non_cancelled_ride_records_before_date(
+    database_url: str,
+    *,
+    before_date: date,
+    limit: int,
+) -> list[dict[str, Any]]:
+    return _list_ride_records(
+        database_url,
+        where_clause="""
+            WHERE ride_date <= ?
+              AND completion_status != ?
+        """,
+        params=(
             _normalize_date_like(before_date),
             "cancelled",
             limit,
@@ -201,7 +222,7 @@ def _hydrate_ride_record(row: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_ride_record_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload)
-    normalized["ride_date"] = _normalize_date_like(normalized.get("ride_date"))
+    normalized["ride_date"] = _normalize_required_ride_date(normalized.get("ride_date"))
     normalized["tags"] = list(normalized.get("tags", []))
     return normalized
 
@@ -238,6 +259,13 @@ def _normalize_ride_date(ride_date: Any, created_at: Any) -> str:
         return created[:10]
 
     return date.today().isoformat()
+
+
+def _normalize_required_ride_date(ride_date: Any) -> str:
+    normalized = _normalize_date_like(ride_date)
+    if isinstance(normalized, str) and normalized.strip():
+        return normalized[:10]
+    raise ValueError("ride-date-missing")
 
 
 def _load_tags(value: Any) -> list[str]:

@@ -45,6 +45,23 @@ export type StructuredConstraints = {
   cross_city_allowed?: boolean;
 };
 
+export type PlannerHandoffContext = {
+  source: "monthly_summary" | "growth_review";
+  action_key: RideMonthlySummaryActionKey;
+  suggested_scene: PlanningScene;
+  seed_query?: string;
+  source_month?: string;
+  source_window_days?: RideGrowthReviewWindowDays;
+  status_key?: string;
+  ride_count?: number;
+  weekly_streak?: number;
+  recent_ride_count?: number;
+  total_distance_km?: number;
+  origin_region?: string;
+  top_tag?: string;
+  suggested_duration_hours?: number;
+};
+
 export type PlannerRequest = {
   intent?: RideIntent;
   query: string;
@@ -53,6 +70,7 @@ export type PlannerRequest = {
   planning_scene?: PlanningScene;
   input_mode: InputMode;
   structured_constraints?: StructuredConstraints;
+  handoff_context?: PlannerHandoffContext;
 };
 
 export type RidePlanPreflightResponse = {
@@ -113,6 +131,7 @@ export type InputSummary = {
   lodging_preference?: string | null;
   cross_city_allowed?: boolean | null;
   defaults_applied: string[];
+  handoff_context?: PlannerHandoffContext;
 };
 
 export type RouteMap = {
@@ -383,6 +402,15 @@ export type RideRecordEntryMode = "planned" | "manual";
 export type RideRecordCompletionStatus = "completed" | "shortened" | "cancelled";
 export type RideRecordEffortFeeling = "easy" | "steady" | "hard";
 export type RideRecordMoodAfter = "refreshed" | "normal" | "tired";
+export type RideMonthlySummaryHabitStatus = "starting" | "rebuilding" | "steady" | "overreaching";
+export type RideMonthlySummaryActionKey =
+  | "schedule_easy_city_ride"
+  | "resume_with_short_ride"
+  | "maintain_weekly_rhythm"
+  | "take_recovery_window";
+export type RideMonthlySummarySuggestedScene = "city_ride" | "weekend_trip";
+export type RideGrowthReviewStatus = "building" | "steady" | "expanding" | "resetting";
+export type RideGrowthReviewWindowDays = 30 | 90 | 180;
 
 export type CreateRideRecordRequest = {
   entry_mode: RideRecordEntryMode;
@@ -462,6 +490,97 @@ export type RideRecordListItem = {
 
 export type RideRecordListResponse = {
   items: RideRecordListItem[];
+};
+
+export type RideMonthlySummaryAction = {
+  action_key: RideMonthlySummaryActionKey;
+  title: string;
+  body: string;
+  suggested_scene: RideMonthlySummarySuggestedScene;
+  suggested_entry?: string | null;
+};
+
+export type RideMonthlySummaryPayload = {
+  month: string;
+  period_start: string;
+  period_end: string;
+  ride_count: number;
+  ride_day_count: number;
+  completed_count: number;
+  shortened_count: number;
+  cancelled_count: number;
+  total_distance_km: number;
+  total_duration_hours: number;
+  planned_count: number;
+  manual_count: number;
+  last_ride_date?: string | null;
+  days_since_last_ride?: number | null;
+  weekly_streak: number;
+  habit_status: RideMonthlySummaryHabitStatus;
+  next_action: RideMonthlySummaryAction;
+  summary_headline: string;
+  summary_body: string;
+  top_start_region?: string | null;
+  top_tag?: string | null;
+  hard_effort_count: number;
+  tired_mood_count: number;
+  matched_plan_count: number;
+  month_to_date: boolean;
+  recent_30d_ride_count: number;
+};
+
+export type RideMonthlySummaryResponse = {
+  ride_monthly_summary: RideMonthlySummaryPayload;
+};
+
+export type RideGrowthReviewMilestone = {
+  milestone_key: string;
+  title: string;
+  body: string;
+};
+
+export type RideGrowthReviewPayload = {
+  window_days: RideGrowthReviewWindowDays;
+  period_start: string;
+  period_end: string;
+  ride_count: number;
+  ride_day_count: number;
+  completed_count: number;
+  total_distance_km: number;
+  total_duration_hours: number;
+  longest_distance_km: number;
+  longest_duration_hours: number;
+  active_month_count: number;
+  best_weekly_streak: number;
+  growth_status: RideGrowthReviewStatus;
+  review_headline: string;
+  review_body: string;
+  next_focus: RideMonthlySummaryAction;
+  milestones: RideGrowthReviewMilestone[];
+  planned_count: number;
+  manual_count: number;
+  matched_plan_count: number;
+  top_start_region?: string | null;
+  top_tag?: string | null;
+  recent_vs_previous_ride_delta: number;
+  recent_vs_previous_distance_delta_km: number;
+};
+
+export type RideGrowthReviewResponse = {
+  ride_growth_review: RideGrowthReviewPayload;
+};
+
+export type TrackRideMonthlySummaryCtaClickRequest = {
+  month: string;
+  action_key: RideMonthlySummaryActionKey;
+  suggested_scene: RideMonthlySummarySuggestedScene;
+};
+
+export type TrackRideGrowthReviewCtaClickRequest = {
+  window_days: RideGrowthReviewWindowDays;
+  action_key: RideMonthlySummaryActionKey;
+  suggested_scene: RideMonthlySummarySuggestedScene;
+  growth_status: RideGrowthReviewStatus;
 };
 
 export type PlannerStageUpdate = {
@@ -668,6 +787,46 @@ export async function listRideRecords(limit = 20): Promise<RideRecordListRespons
   return response.json() as Promise<RideRecordListResponse>;
 }
 
+export async function getRideMonthlySummary(month: string): Promise<RideMonthlySummaryResponse> {
+  const searchParams = new URLSearchParams({ month });
+  const response = await fetch(`/api/v1/rides/monthly-summary?${searchParams.toString()}`);
+
+  if (!response.ok) {
+    throw new Error(`ride-monthly-summary-request-failed:${response.status}`);
+  }
+
+  return response.json() as Promise<RideMonthlySummaryResponse>;
+}
+
+export async function getRideGrowthReview(windowDays: RideGrowthReviewWindowDays): Promise<RideGrowthReviewResponse> {
+  const searchParams = new URLSearchParams({ window_days: String(windowDays) });
+  const response = await fetch(`/api/v1/rides/growth-review?${searchParams.toString()}`);
+
+  if (!response.ok) {
+    throw new Error(`ride-growth-review-request-failed:${response.status}`);
+  }
+
+  return response.json() as Promise<RideGrowthReviewResponse>;
+}
+
+export async function trackRideMonthlySummaryCtaClick(payload: TrackRideMonthlySummaryCtaClickRequest): Promise<void> {
+  await fetch("/api/v1/rides/monthly-summary-events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    keepalive: true
+  });
+}
+
+export async function trackRideGrowthReviewCtaClick(payload: TrackRideGrowthReviewCtaClickRequest): Promise<void> {
+  await fetch("/api/v1/rides/growth-review-events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    keepalive: true
+  });
+}
+
 function buildRidePlanRequest(request: PlannerRequest, userProfile?: UserProfile): Record<string, unknown> {
   const requestBody: Record<string, unknown> = {
     intent: request.intent,
@@ -683,6 +842,9 @@ function buildRidePlanRequest(request: PlannerRequest, userProfile?: UserProfile
   }
   if (request.structured_constraints) {
     requestBody.structured_constraints = request.structured_constraints;
+  }
+  if (request.handoff_context) {
+    requestBody.handoff_context = request.handoff_context;
   }
   if (userProfile && (userProfile.fitness_level || userProfile.slope_tolerance || userProfile.ride_style_preferences.length > 0)) {
     requestBody.user_profile = {

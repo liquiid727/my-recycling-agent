@@ -28,6 +28,12 @@ class StubWeatherProvider:
         }
 
 
+class FixedDate(date):
+    @classmethod
+    def today(cls) -> "FixedDate":
+        return cls(2026, 6, 15)
+
+
 def test_create_ride_record_from_saved_plan_returns_summary(
     tmp_path,
     monkeypatch,
@@ -225,6 +231,30 @@ def test_create_manual_ride_record_normalizes_source_request_no_to_none(tmp_path
 
     assert response.status_code == 200
     assert response.json()["ride_record"]["source_request_no"] is None
+
+
+def test_create_ride_record_rejects_future_ride_date(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CYCLING_AGENT_DATABASE_URL", f"sqlite:///{tmp_path / 'cycling-agent.db'}")
+    route_module = import_module("app.api.routes.ride_record")
+    monkeypatch.setattr(route_module, "date", FixedDate)
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/api/v1/rides/records",
+        json={
+            "entry_mode": "manual",
+            "ride_date": "2026-06-16",
+            "route_title": "明天的骑行先记上",
+            "completion_status": "completed",
+            "actual_duration_hours": 1.0,
+            "actual_distance_km": 18.0,
+            "effort_feeling": "easy",
+            "mood_after": "refreshed",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "ride-record-date-in-future"
 
 
 def test_list_and_get_ride_records_return_saved_record(tmp_path, monkeypatch) -> None:

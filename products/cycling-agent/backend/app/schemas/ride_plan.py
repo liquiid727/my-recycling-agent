@@ -26,6 +26,15 @@ RideMonthlySummaryActionKey = Literal[
 ]
 RideMonthlySummarySuggestedScene = Literal["city_ride", "weekend_trip"]
 RideMonthlySummaryHabitStatus = Literal["starting", "rebuilding", "steady", "overreaching"]
+RideMonthlySummaryEventType = Literal[
+    "summary_request",
+    "invalid_month",
+    "cta_click",
+    "growth_review_request",
+    "growth_review_invalid_window",
+    "growth_review_cta_click",
+]
+RideGrowthReviewStatus = Literal["building", "steady", "expanding", "resetting"]
 
 
 class UserProfilePayload(BaseModel):
@@ -48,6 +57,7 @@ class RidePlanRequestSchema(BaseModel):
     input_mode: str = Field(default="natural", pattern="^(natural|structured)$")
     structured_constraints: "StructuredConstraintsPayload | None" = None
     user_profile: UserProfilePayload | None = None
+    handoff_context: "PlannerHandoffContextPayload | None" = None
 
 
 class OriginLocationPayload(BaseModel):
@@ -74,6 +84,23 @@ class StructuredConstraintsPayload(BaseModel):
     overnight_preference: str | None = Field(default=None, pattern="^(avoid|optional|required)$")
     lodging_preference: str | None = None
     cross_city_allowed: bool | None = None
+
+
+class PlannerHandoffContextPayload(BaseModel):
+    source: Literal["monthly_summary", "growth_review"]
+    action_key: RideMonthlySummaryActionKey
+    suggested_scene: Literal["city_ride", "weekend_trip"]
+    seed_query: str | None = None
+    source_month: str | None = Field(default=None, pattern=RIDE_MONTHLY_SUMMARY_MONTH_PATTERN)
+    source_window_days: int | None = Field(default=None, ge=1)
+    status_key: str | None = None
+    ride_count: int | None = Field(default=None, ge=0)
+    weekly_streak: int | None = Field(default=None, ge=0)
+    recent_ride_count: int | None = Field(default=None, ge=0)
+    total_distance_km: float | None = Field(default=None, ge=0)
+    origin_region: str | None = None
+    top_tag: str | None = None
+    suggested_duration_hours: float | None = Field(default=None, ge=0)
 
 
 class RidePlanPreflightResponseSchema(BaseModel):
@@ -425,24 +452,109 @@ class RideSummarySchema(BaseModel):
 class RideMonthlySummaryActionSchema(BaseModel):
     action_key: RideMonthlySummaryActionKey
     title: str
-    description: str
+    body: str
     suggested_scene: RideMonthlySummarySuggestedScene
+    suggested_entry: str | None = None
 
 
 class RideMonthlySummaryPayloadSchema(BaseModel):
     month: str = Field(pattern=RIDE_MONTHLY_SUMMARY_MONTH_PATTERN)
-    total_rides: int = Field(ge=0)
-    completed_rides: int = Field(ge=0)
-    shortened_rides: int = Field(ge=0)
-    cancelled_rides: int = Field(ge=0)
+    period_start: date
+    period_end: date
+    ride_count: int = Field(ge=0)
+    ride_day_count: int = Field(ge=0)
+    completed_count: int = Field(ge=0)
+    shortened_count: int = Field(ge=0)
+    cancelled_count: int = Field(ge=0)
     total_distance_km: float = Field(ge=0)
     total_duration_hours: float = Field(ge=0)
+    planned_count: int = Field(ge=0)
+    manual_count: int = Field(ge=0)
+    last_ride_date: date | None = None
+    days_since_last_ride: int | None = Field(default=None, ge=0)
+    weekly_streak: int = Field(ge=0)
     habit_status: RideMonthlySummaryHabitStatus
-    recommended_action: RideMonthlySummaryActionSchema
+    next_action: RideMonthlySummaryActionSchema
+    summary_headline: str
+    summary_body: str
+    top_start_region: str | None = None
+    top_tag: str | None = None
+    hard_effort_count: int | None = Field(default=None, ge=0)
+    tired_mood_count: int | None = Field(default=None, ge=0)
+    matched_plan_count: int | None = Field(default=None, ge=0)
+    month_to_date: bool | None = None
+    recent_30d_ride_count: int | None = Field(default=None, ge=0)
 
 
 class RideMonthlySummaryResponseSchema(BaseModel):
-    summary: RideMonthlySummaryPayloadSchema
+    ride_monthly_summary: RideMonthlySummaryPayloadSchema
+
+
+class RideGrowthReviewMilestoneSchema(BaseModel):
+    milestone_key: str
+    title: str
+    body: str
+
+
+class RideGrowthReviewPayloadSchema(BaseModel):
+    window_days: int = Field(ge=1)
+    period_start: date
+    period_end: date
+    ride_count: int = Field(ge=0)
+    ride_day_count: int = Field(ge=0)
+    completed_count: int = Field(ge=0)
+    total_distance_km: float = Field(ge=0)
+    total_duration_hours: float = Field(ge=0)
+    longest_distance_km: float = Field(ge=0)
+    longest_duration_hours: float = Field(ge=0)
+    active_month_count: int = Field(ge=0)
+    best_weekly_streak: int = Field(ge=0)
+    growth_status: RideGrowthReviewStatus
+    review_headline: str
+    review_body: str
+    next_focus: RideMonthlySummaryActionSchema
+    milestones: list[RideGrowthReviewMilestoneSchema] = Field(default_factory=list)
+    planned_count: int = Field(default=0, ge=0)
+    manual_count: int = Field(default=0, ge=0)
+    matched_plan_count: int = Field(default=0, ge=0)
+    top_start_region: str | None = None
+    top_tag: str | None = None
+    recent_vs_previous_ride_delta: int = 0
+    recent_vs_previous_distance_delta_km: float = 0
+
+
+class RideGrowthReviewResponseSchema(BaseModel):
+    ride_growth_review: RideGrowthReviewPayloadSchema
+
+
+class TrackRideMonthlySummaryCtaClickRequestSchema(BaseModel):
+    month: str = Field(pattern=RIDE_MONTHLY_SUMMARY_MONTH_PATTERN)
+    action_key: RideMonthlySummaryActionKey
+    suggested_scene: RideMonthlySummarySuggestedScene
+
+
+class TrackRideGrowthReviewCtaClickRequestSchema(BaseModel):
+    window_days: Literal[30, 90, 180]
+    action_key: RideMonthlySummaryActionKey
+    suggested_scene: RideMonthlySummarySuggestedScene
+    growth_status: RideGrowthReviewStatus
+
+
+class RideMonthlySummaryEventSchema(BaseModel):
+    event_no: str
+    event_type: RideMonthlySummaryEventType
+    requested_month: str | None = None
+    requested_window_days: int | None = Field(default=None, ge=1)
+    suggested_scene: RideMonthlySummarySuggestedScene | None = None
+    is_empty_summary: bool | None = None
+    is_zero_growth_review: bool | None = None
+    has_planned_rides: bool | None = None
+    habit_status: RideMonthlySummaryHabitStatus | None = None
+    growth_status: RideGrowthReviewStatus | None = None
+    has_milestones: bool | None = None
+    next_action_key: RideMonthlySummaryActionKey | None = None
+    source: str = Field(pattern="^(backend|frontend)$")
+    created_at: str
 
 
 class RideRecordPayload(BaseModel):

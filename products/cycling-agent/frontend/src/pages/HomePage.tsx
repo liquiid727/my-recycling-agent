@@ -5,8 +5,10 @@
 
 import PlanResultView from "../components/PlanResultView";
 import ThemeToggle from "../components/ThemeToggle";
+import type { PlannerHandoffContext } from "../features/planner/api";
 import { usePlannerFlow } from "../features/planner/hooks";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useRef } from "react";
 
 const START_POINT_SUGGESTIONS = [
   { name: "闻涛路滨江段", region: "滨江", hint: "钱塘江休闲往返" },
@@ -20,6 +22,8 @@ const REGION_OPTIONS = ["滨江", "西湖", "湘湖", "萧山", "余杭", "龙�
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const appliedPlannerSeed = useRef<string | null>(null);
   const {
     clarificationPrompt,
     error,
@@ -33,6 +37,7 @@ export default function HomePage() {
     result,
     setInputMode,
     setIntent,
+    setHandoffContext,
     setQuery,
     setQueryFromQuickReply,
     setStructuredField,
@@ -41,10 +46,41 @@ export default function HomePage() {
     stageUpdates,
     structuredConstraints,
     submit,
+    handoffContext,
     targetDate
   } = usePlannerFlow({
     onSuccess: (plan) => navigate(`/plans/${plan.request_no}`)
   });
+
+  useEffect(() => {
+    const handoffContext = buildPlannerHandoffContext(searchParams);
+    const seededQuery = searchParams.get("seedQuery")?.trim();
+    const seededIntent = searchParams.get("intent");
+    if (!seededQuery && !handoffContext) {
+      return;
+    }
+    const seedKey = `${seededIntent ?? ""}:${seededQuery ?? ""}:${handoffContext?.source ?? ""}:${handoffContext?.action_key ?? ""}:${handoffContext?.status_key ?? ""}`;
+    if (appliedPlannerSeed.current === seedKey) {
+      return;
+    }
+    appliedPlannerSeed.current = seedKey;
+    setHandoffContext(handoffContext);
+    if (seededIntent === "ride_plan" || seededIntent === "weekend_recommendation" || seededIntent === "ride_today") {
+      setIntent(seededIntent);
+    }
+    if (seededQuery) {
+      setQuery(seededQuery);
+    }
+    if (handoffContext?.origin_region) {
+      setStructuredField("origin_region", handoffContext.origin_region);
+    }
+    if (handoffContext?.suggested_duration_hours != null) {
+      setStructuredField("available_hours", String(handoffContext.suggested_duration_hours));
+    }
+    if (handoffContext?.suggested_scene === "weekend_trip") {
+      setStructuredField("duration_bucket", "half_day");
+    }
+  }, [searchParams, setHandoffContext, setIntent, setQuery, setStructuredField]);
 
   function applyStartPointSuggestion(name: string, region: string) {
     setStructuredField("start_point", name);
@@ -75,6 +111,23 @@ export default function HomePage() {
       </section>
 
       <section className="planner-panel">
+        {handoffContext ? (
+          <article className="detail-panel state-success">
+            <div className="section-heading">
+              <p className="section-kicker">Planner Handoff</p>
+              <h2>{formatHandoffHeadline(handoffContext)}</h2>
+            </div>
+            <p className="summary-copy">{formatHandoffBody(handoffContext)}</p>
+            <div className="metric-row">
+              <span>来源：{handoffContext.source === "monthly_summary" ? "月度总结" : "增长回顾"}</span>
+              {handoffContext.status_key ? <span>状态：{handoffContext.status_key}</span> : null}
+              {handoffContext.ride_count != null ? <span>{handoffContext.ride_count} 条记录</span> : null}
+              {handoffContext.weekly_streak != null ? <span>连续 {handoffContext.weekly_streak} 周</span> : null}
+              {handoffContext.origin_region ? <span>区域：{handoffContext.origin_region}</span> : null}
+              {handoffContext.suggested_duration_hours != null ? <span>{handoffContext.suggested_duration_hours} h</span> : null}
+            </div>
+          </article>
+        ) : null}
         <form className="planner-form" onSubmit={submit}>
           <div className="segmented-control" aria-label="骑行意图">
             <button type="button" aria-pressed={intent === "ride_today"} onClick={() => setIntent("ride_today")}>
@@ -395,4 +448,63 @@ export default function HomePage() {
       </section>
     </main>
   );
+}
+
+function buildPlannerHandoffContext(searchParams: URLSearchParams): PlannerHandoffContext | null {
+  const source = searchParams.get("handoffSource");
+  const actionKey = searchParams.get("handoffActionKey");
+  const suggestedScene = searchParams.get("handoffScene");
+  if (
+    (source !== "monthly_summary" && source !== "growth_review")
+    || (suggestedScene !== "city_ride" && suggestedScene !== "weekend_trip")
+    || !actionKey
+  ) {
+    return null;
+  }
+  return {
+    source,
+    action_key: actionKey as PlannerHandoffContext["action_key"],
+    suggested_scene: suggestedScene,
+    seed_query: searchParams.get("seedQuery")?.trim() || undefined,
+    source_month: searchParams.get("handoffMonth")?.trim() || undefined,
+    source_window_days: parseOptionalInt(searchParams.get("handoffWindowDays")) as PlannerHandoffContext["source_window_days"],
+    status_key: searchParams.get("handoffStatus")?.trim() || undefined,
+    ride_count: parseOptionalInt(searchParams.get("handoffRideCount")),
+    weekly_streak: parseOptionalInt(searchParams.get("handoffWeeklyStreak")),
+    recent_ride_count: parseOptionalInt(searchParams.get("handoffRecentRideCount")),
+    total_distance_km: parseOptionalFloat(searchParams.get("handoffDistanceKm")),
+    origin_region: searchParams.get("handoffOriginRegion")?.trim() || undefined,
+    top_tag: searchParams.get("handoffTag")?.trim() || undefined,
+    suggested_duration_hours: parseOptionalFloat(searchParams.get("handoffSuggestedHours")),
+  };
+}
+
+function parseOptionalInt(value: string | null): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseOptionalFloat(value: string | null): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function formatHandoffHeadline(handoffContext: PlannerHandoffContext): string {
+  if (handoffContext.source === "growth_review") {
+    return "已从增长回顾带入这次规划上下文";
+  }
+  return "已从月度总结带入这次规划上下文";
+}
+
+function formatHandoffBody(handoffContext: PlannerHandoffContext): string {
+  if (handoffContext.source === "growth_review") {
+    return "当前规划会带上最近滚动窗口的节奏信息，方便把下一次出门接在真实进展之后。";
+  }
+  return "当前规划会带上最近月度节奏和下一步建议，不再只是把一句 seed 文案塞回首页。";
 }

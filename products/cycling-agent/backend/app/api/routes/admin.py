@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from app.repositories.city_strategy_repository import list_city_strategy_configs, save_city_strategy_config
 from app.repositories.planning_audit_repository import get_planning_audit
 from app.repositories.query_log_repository import list_query_logs
+from app.repositories.ride_monthly_summary_event_repository import list_ride_monthly_summary_events
 from app.repositories.risk_rule_repository import list_risk_rules, save_risk_rule
 from app.repositories.route_template_repository import list_route_templates, save_route_template
 from app.repositories.nearby_trip_repository import (
@@ -21,6 +22,7 @@ from app.schemas.ride_plan import (
     PlanningAuditBundleSchema,
     QueryLogEntrySchema,
     RiskRuleSchema,
+    RideMonthlySummaryEventSchema,
     RouteTemplateAdminSchema,
     TripTemplateAdminSchema,
 )
@@ -145,6 +147,14 @@ async def get_query_logs(request: Request) -> list[QueryLogEntrySchema]:
     if not database_url:
         raise HTTPException(status_code=500, detail="database-url-missing")
     return [QueryLogEntrySchema.model_validate(item) for item in list_query_logs(database_url)]
+
+
+@router.get("/ride-monthly-summary-events", response_model=list[RideMonthlySummaryEventSchema])
+async def get_ride_monthly_summary_events(request: Request) -> list[RideMonthlySummaryEventSchema]:
+    database_url = getattr(request.app.state, "database_url", None)
+    if not database_url:
+        raise HTTPException(status_code=500, detail="database-url-missing")
+    return [RideMonthlySummaryEventSchema.model_validate(item) for item in list_ride_monthly_summary_events(database_url)]
 
 
 @router.get("/planning-audit/{request_no}", response_model=PlanningAuditBundleSchema)

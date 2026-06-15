@@ -554,7 +554,7 @@ def _merge_structured_constraints(payload: RidePlanRequestSchema, parsed_constra
     if payload.input_mode != "structured" or payload.structured_constraints is None:
         if payload.planning_scene:
             parsed_constraints = {**parsed_constraints, "planning_scene": payload.planning_scene}
-        return parsed_constraints
+        return _merge_handoff_context(payload, parsed_constraints)
     structured = build_structured_constraints(payload.structured_constraints.model_dump(), user_profile)
     merged = dict(parsed_constraints)
     for key, value in structured.items():
@@ -565,6 +565,21 @@ def _merge_structured_constraints(payload: RidePlanRequestSchema, parsed_constra
     merged["missing_fields"] = structured["missing_fields"]
     merged["confidence"] = structured["confidence"]
     merged["defaults_applied"] = structured["defaults_applied"]
+    return _merge_handoff_context(payload, merged)
+
+
+def _merge_handoff_context(payload: RidePlanRequestSchema, parsed_constraints: dict) -> dict:
+    if payload.handoff_context is None:
+        return parsed_constraints
+
+    handoff = payload.handoff_context
+    merged = dict(parsed_constraints)
+    if handoff.origin_region and not merged.get("origin_region"):
+        merged["origin_region"] = handoff.origin_region
+    if handoff.suggested_duration_hours and not merged.get("available_hours"):
+        merged["available_hours"] = handoff.suggested_duration_hours
+    if handoff.suggested_scene == "weekend_trip" and not merged.get("duration_bucket"):
+        merged["duration_bucket"] = "half_day"
     return merged
 
 
@@ -585,6 +600,8 @@ def _build_input_summary(payload: RidePlanRequestSchema, constraints: dict) -> d
         "priority": constraints.get("priority"),
         "defaults_applied": constraints.get("defaults_applied", []),
     }
+    if payload.handoff_context is not None:
+        summary["handoff_context"] = payload.handoff_context.model_dump(mode="json", exclude_none=True)
     if constraints.get("planning_scene"):
         summary["planning_scene"] = constraints.get("planning_scene")
     if constraints.get("planning_mode") == "nearby_trip":

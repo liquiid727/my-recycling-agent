@@ -231,6 +231,36 @@ def test_preflight_accepts_intent_only_weekend_payload_and_maps_execution_fields
     assert body["parsed_constraints"]["planning_scene"] == "weekend_trip"
 
 
+def test_preflight_accepts_handoff_context_and_uses_it_to_fill_missing_duration() -> None:
+    client = TestClient(create_app(weather_provider=StubWeatherProvider()))
+    response = client.post(
+        "/api/v1/ride/plan/preflight",
+        json={
+            "query": "周六从闻涛路滨江段出发，不想太累",
+            "target_date": "2026-05-30",
+            "handoff_context": {
+                "source": "monthly_summary",
+                "action_key": "maintain_weekly_rhythm",
+                "suggested_scene": "city_ride",
+                "seed_query": "这周再安排一次轻松骑",
+                "source_month": "2026-06",
+                "status_key": "steady",
+                "ride_count": 2,
+                "weekly_streak": 3,
+                "recent_ride_count": 3,
+                "origin_region": "滨江",
+                "suggested_duration_hours": 2.0,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ready_to_plan"] is True
+    assert body["parsed_constraints"]["origin_region"] == "滨江"
+    assert body["parsed_constraints"]["available_hours"] == 2.0
+
+
 def test_post_ride_plan_rejects_missing_core_fields_before_planning() -> None:
     client = TestClient(create_app(weather_provider=StubWeatherProvider()))
     response = client.post(

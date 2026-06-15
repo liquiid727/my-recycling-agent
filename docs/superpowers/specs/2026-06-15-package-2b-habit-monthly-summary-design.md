@@ -233,7 +233,7 @@ Stable `action_key` values for v1:
 
 1. User reads `next_action`.
 2. User clicks a CTA such as “按这个建议去规划”.
-3. Frontend routes the user back to `/` and seeds the planner with a lightweight suggestion when possible.
+3. Frontend routes the user back to `/` with the suggestion text plus structured handoff context such as source month, habit status, streak, and suggested duration when available.
 4. The existing planning chain handles the ride planning request.
 
 ## Aggregation Logic
