@@ -517,6 +517,8 @@ def _apply_compatible_migrations(connection, database_url: str) -> None:
         for column_name, definition in table_columns:
             if column_name in existing:
                 continue
+            if database_kind(database_url) == "sqlite" and table_name == "ride_records" and column_name == "updated_at":
+                definition = "TEXT"
             connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
     if _list_columns(connection, database_url, "ride_records"):
         _backfill_ride_record_defaults(connection)

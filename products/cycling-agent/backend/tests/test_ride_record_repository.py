@@ -4,6 +4,8 @@ EN: Ride record repository tests covering save, detail lookup, and list lookup.
 
 from __future__ import annotations
 
+import json
+import sqlite3
 from importlib import import_module
 
 import pytest
@@ -48,29 +50,54 @@ def test_save_and_list_ride_records(tmp_path) -> None:
         "mood_after": "refreshed",
         "notes": "风不大，江边体感不错。",
         "tags": ["evening", "riverside"],
-        "payload": {
-            "ride_summary": {
-                "destination_name": "钱塘江南岸",
-                "start_point": "闻涛路滨江段",
-                "completion_status": "completed",
-            },
-            "route_snapshot": {
-                "route_code": "DYN-HANGZHOU-001",
-                "route_title": "闻涛路晚风线",
-            },
-            "extra_notes": ["补给正常", "路面顺"],
-        },
     }
 
-    repository.save_ride_record(database_url, payload)
+    saved_payload = repository.save_ride_record(database_url, payload)
 
     saved = repository.get_ride_record(database_url, "RR-20260615-001")
+    assert saved_payload == payload
     assert saved == payload
-    assert saved["payload"]["route_snapshot"]["route_title"] == "闻涛路晚风线"
-    assert RideRecordPayload.model_validate({k: v for k, v in saved.items() if k != "payload"}).effort_feeling == "steady"
+    assert "payload" not in saved
+    assert RideRecordPayload.model_validate(saved).effort_feeling == "steady"
+
+    with sqlite3.connect(tmp_path / "cycling-agent.db") as connection:
+        persisted = connection.execute(
+            "SELECT payload_json FROM ride_records WHERE ride_record_no = ?",
+            ("RR-20260615-001",),
+        ).fetchone()[0]
+    assert json.loads(persisted) == payload
 
     listed = repository.list_ride_records(database_url)
     assert listed == [payload]
+
+
+def test_init_storage_migrates_legacy_sqlite_ride_records_without_timestamp_default_error(tmp_path) -> None:
+    database_path = tmp_path / "legacy-cycling-agent.db"
+    database_url = f"sqlite:///{database_path}"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE ride_records (
+                ride_record_no TEXT PRIMARY KEY,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute("INSERT INTO ride_records (ride_record_no) VALUES (?)", ("RR-LEGACY-001",))
+
+    init_storage(database_url)
+
+    with sqlite3.connect(database_path) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(ride_records)").fetchall()}
+        migrated = connection.execute(
+            "SELECT updated_at, payload_json, tags_json FROM ride_records WHERE ride_record_no = ?",
+            ("RR-LEGACY-001",),
+        ).fetchone()
+
+    assert {"updated_at", "payload_json", "tags_json"}.issubset(columns)
+    assert migrated[0] is not None
+    assert migrated[1] == "{}"
+    assert migrated[2] == "[]"
 
 
 def test_create_ride_record_request_schema_enforces_flat_contract() -> None:

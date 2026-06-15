@@ -144,7 +144,6 @@ def _hydrate_ride_record(row: dict[str, Any]) -> dict[str, Any]:
         "mood_after": row["mood_after"],
         "notes": row["notes"],
         "tags": json.loads(row["tags_json"]),
-        "payload": {},
     }
 
 
@@ -152,7 +151,6 @@ def _normalize_ride_record_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload)
     normalized["ride_date"] = _normalize_date_like(normalized.get("ride_date"))
     normalized["tags"] = list(normalized.get("tags", []))
-    normalized["payload"] = dict(normalized.get("payload", {}))
     return normalized
 
 
