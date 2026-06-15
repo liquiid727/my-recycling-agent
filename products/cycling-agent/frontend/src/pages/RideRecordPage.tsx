@@ -31,7 +31,7 @@ export default function RideRecordPage() {
   const sourceRequestNo = searchParams.get("sourceRequestNo")?.trim() ?? "";
   const [sourcePlan, setSourcePlan] = useState<RidePlanResponse | null>(null);
   const [loading, setLoading] = useState(sourceRequestNo.length > 0);
-  const [error, setError] = useState<string | null>(null);
+  const [sourcePlanWarning, setSourcePlanWarning] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [form, setForm] = useState<RideRecordFormState>({
@@ -72,7 +72,7 @@ export default function RideRecordPage() {
 
     let active = true;
     setLoading(true);
-    setError(null);
+    setSourcePlanWarning(null);
 
     void getRidePlan(sourceRequestNo)
       .then((payload) => {
@@ -102,7 +102,7 @@ export default function RideRecordPage() {
         if (!active) {
           return;
         }
-        setError("关联规划暂时不可用，请稍后再试。");
+        setSourcePlanWarning("关联规划暂时不可用，仍可直接记录这次骑行结果。");
         setLoading(false);
       });
 
@@ -143,21 +143,6 @@ export default function RideRecordPage() {
     );
   }
 
-  if (error) {
-    return (
-      <main className="page-shell">
-        <ThemeToggle />
-        <article className="state-panel state-error" role="alert">
-          <h1>记录一次骑行</h1>
-          <p>{error}</p>
-          <p className="hero-link-row">
-            <Link to="/rides">查看最近记录</Link>
-          </p>
-        </article>
-      </main>
-    );
-  }
-
   return (
     <main className="page-shell">
       <ThemeToggle />
@@ -181,6 +166,12 @@ export default function RideRecordPage() {
       </section>
 
       <section className="success-layout">
+        {sourcePlanWarning ? (
+          <article className="detail-panel state-panel state-error" role="alert">
+            <h2>来源规划暂时未加载</h2>
+            <p>{sourcePlanWarning}</p>
+          </article>
+        ) : null}
         {sourcePlanContext ? (
           <article className="detail-panel detail-panel-primary">
             <div className="section-heading">

@@ -100,6 +100,41 @@ def test_init_storage_migrates_legacy_sqlite_ride_records_without_timestamp_defa
     assert migrated[2] == "[]"
 
 
+def test_legacy_sqlite_ride_record_rows_hydrate_with_safe_defaults(tmp_path) -> None:
+    database_path = tmp_path / "legacy-hydrate-cycling-agent.db"
+    database_url = f"sqlite:///{database_path}"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE ride_records (
+                ride_record_no TEXT PRIMARY KEY,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO ride_records (ride_record_no, created_at) VALUES (?, ?)",
+            ("RR-LEGACY-READ-001", "2026-06-01 08:30:00"),
+        )
+
+    init_storage(database_url)
+
+    repository = _load_repository_module()
+    hydrated = repository.get_ride_record(database_url, "RR-LEGACY-READ-001")
+    listed = repository.list_ride_records(database_url)
+
+    assert hydrated is not None
+    assert hydrated["ride_record_no"] == "RR-LEGACY-READ-001"
+    assert hydrated["entry_mode"] == "manual"
+    assert hydrated["ride_date"] == "2026-06-01"
+    assert hydrated["completion_status"] == "cancelled"
+    assert hydrated["effort_feeling"] == "steady"
+    assert hydrated["mood_after"] == "normal"
+    assert hydrated["tags"] == []
+    assert RideRecordPayload.model_validate(hydrated).completion_status == "cancelled"
+    assert listed == [hydrated]
+
+
 def test_create_ride_record_request_schema_enforces_flat_contract() -> None:
     payload = CreateRideRecordRequestSchema(
         entry_mode="planned",

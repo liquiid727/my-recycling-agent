@@ -157,6 +157,54 @@ test("planned entry shows estimate as reference only and does not submit fake ac
   expect(postedBody).not.toHaveProperty("route_code");
 });
 
+test("planned entry stays writable when source plan prefetch fails", async () => {
+  const user = userEvent.setup();
+  let postedBody: Record<string, unknown> | null = null;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/v1/ride/plan/RQ-TEST0001") {
+        return {
+          ok: false,
+          status: 503,
+          json: async () => ({ detail: "temporary-unavailable" }),
+        };
+      }
+      if (url === "/api/v1/rides/records" && init?.method === "POST") {
+        postedBody = JSON.parse(String(init.body));
+        return { ok: true, json: async () => createdRideRecord };
+      }
+      if (url === "/api/v1/rides/records/RR-TEST0001") {
+        return { ok: true, json: async () => createdRideRecord };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }),
+  );
+
+  render(
+    <MemoryRouter initialEntries={["/rides/new?sourceRequestNo=RQ-TEST0001"]}>
+      <Routes>
+        <Route path="/rides/new" element={<RideRecordPage />} />
+        <Route path="/rides/:rideRecordNo" element={<RideRecordDetailPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByText("关联规划暂时不可用，仍可直接记录这次骑行结果。")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "保存骑行记录" })).toBeEnabled();
+
+  await user.type(screen.getByLabelText("实际距离（km）"), "41.2");
+  await user.click(screen.getByRole("button", { name: "保存骑行记录" }));
+
+  expect(await screen.findByText("记录编号：RR-TEST0001")).toBeInTheDocument();
+  expect(postedBody).toMatchObject({
+    entry_mode: "planned",
+    source_request_no: "RQ-TEST0001",
+    actual_distance_km: 41.2,
+  });
+});
+
 test("manual entry validates required fields before submit", async () => {
   const user = userEvent.setup();
   const fetchMock = vi.fn();
