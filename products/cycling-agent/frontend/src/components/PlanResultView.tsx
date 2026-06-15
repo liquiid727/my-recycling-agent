@@ -101,6 +101,7 @@ export default function PlanResultView({ result }: Props) {
     : null;
   const fallbackReason = result.fallback_reason ?? [];
   const toolTrace = result.tool_trace ?? [];
+  const recordEntryRequestNo = result.request_no;
 
   if ((normalizedPlan?.kind === "weekend_recommendation" || result.planning_mode === "nearby_trip") && result.recommended_trip) {
     return (
@@ -133,6 +134,7 @@ export default function PlanResultView({ result }: Props) {
             </ul>
           ) : null}
         </article>
+        {recordEntryRequestNo ? <RideRecordEntryPanel requestNo={recordEntryRequestNo} /> : null}
 
         {result.trip_rhythm ? (
           <article className="detail-panel">
@@ -221,12 +223,31 @@ export default function PlanResultView({ result }: Props) {
       >
         <RecommendationCard plan={recommendation} />
       </Link>
+      {recordEntryRequestNo ? <RideRecordEntryPanel requestNo={recordEntryRequestNo} /> : null}
       {result.roadbook?.risk_summary ? <RiskBreakdownCard risk={result.roadbook.risk_summary} /> : null}
       {result.route_map ? <RouteMapSection routeMap={result.route_map} /> : null}
       {alternatives.length > 0 ? <AlternativeRouteList plans={alternatives} /> : null}
       {roadbook ? <RoadbookSection roadbook={roadbook} /> : null}
       {parsedConstraints || toolTrace.length > 0 ? <DebugDetailsPanel parsedConstraints={parsedConstraints} toolTrace={toolTrace} /> : null}
     </div>
+  );
+}
+
+function RideRecordEntryPanel({ requestNo }: { requestNo: string }) {
+  return (
+    <article className="detail-panel">
+      <div className="section-heading">
+        <p className="section-kicker">Post Ride</p>
+        <h3>这趟骑完后，顺手把结果记下来</h3>
+      </div>
+      <p className="summary-copy">记录实际时长、体感和收尾反馈，后面回看会直接带出本次骑后总结。</p>
+      <div className="planner-actions">
+        <Link className="primary-button button-link" to={`/rides/new?sourceRequestNo=${requestNo}`}>
+          记录这次骑行
+        </Link>
+        <Link to="/rides">查看最近记录</Link>
+      </div>
+    </article>
   );
 }
 

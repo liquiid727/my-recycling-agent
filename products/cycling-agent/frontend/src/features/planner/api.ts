@@ -379,6 +379,79 @@ export type TripRisks = {
   fallback_plan: string;
 };
 
+export type RideRecordEntryMode = "planned" | "manual";
+export type RideRecordCompletionStatus = "completed" | "shortened" | "cancelled";
+export type RideRecordEffortFeeling = "easy" | "steady" | "hard";
+export type RideRecordMoodAfter = "refreshed" | "normal" | "tired";
+
+export type CreateRideRecordRequest = {
+  entry_mode: RideRecordEntryMode;
+  source_request_no?: string;
+  ride_date: string;
+  route_code?: string;
+  route_title?: string;
+  destination_name?: string;
+  start_point?: string;
+  origin_region?: string;
+  completion_status: RideRecordCompletionStatus;
+  actual_duration_hours?: number;
+  actual_distance_km?: number;
+  effort_feeling: RideRecordEffortFeeling;
+  mood_after: RideRecordMoodAfter;
+  notes?: string;
+  tags: string[];
+};
+
+export type RideSummary = {
+  headline: string;
+  summary: string;
+  completion_assessment: string;
+  effort_assessment: string;
+  recovery_advice: string;
+  next_ride_prompt: string;
+  plan_alignment?: string | null;
+  confidence_notes: string[];
+};
+
+export type RideRecordPayload = {
+  ride_record_no: string;
+  entry_mode: RideRecordEntryMode;
+  source_request_no?: string | null;
+  ride_date: string;
+  intent?: RideIntent;
+  plan_kind?: "route" | "weekend_recommendation" | null;
+  route_code?: string | null;
+  route_title?: string | null;
+  destination_name?: string | null;
+  start_point?: string | null;
+  origin_region?: string | null;
+  completion_status: RideRecordCompletionStatus;
+  actual_duration_hours?: number | null;
+  actual_distance_km?: number | null;
+  effort_feeling: RideRecordEffortFeeling;
+  mood_after: RideRecordMoodAfter;
+  notes?: string | null;
+  tags: string[];
+};
+
+export type RideRecordDetailResponse = {
+  ride_record: RideRecordPayload;
+  ride_summary: RideSummary;
+};
+
+export type RideRecordListItem = {
+  ride_record_no: string;
+  ride_date: string;
+  route_title?: string | null;
+  destination_name?: string | null;
+  completion_status: RideRecordCompletionStatus;
+  summary_headline?: string | null;
+};
+
+export type RideRecordListResponse = {
+  items: RideRecordListItem[];
+};
+
 export type PlannerStageUpdate = {
   stage_name: string;
   status: string;
@@ -546,6 +619,41 @@ export async function getRidePlan(requestNo: string): Promise<RidePlanResponse> 
   }
 
   return response.json() as Promise<RidePlanResponse>;
+}
+
+export async function createRideRecord(payload: CreateRideRecordRequest): Promise<RideRecordDetailResponse> {
+  const response = await fetch("/api/v1/rides/records", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`ride-record-create-request-failed:${response.status}`);
+  }
+
+  return response.json() as Promise<RideRecordDetailResponse>;
+}
+
+export async function getRideRecord(rideRecordNo: string): Promise<RideRecordDetailResponse> {
+  const response = await fetch(`/api/v1/rides/records/${rideRecordNo}`);
+
+  if (!response.ok) {
+    throw new Error(`ride-record-detail-request-failed:${response.status}`);
+  }
+
+  return response.json() as Promise<RideRecordDetailResponse>;
+}
+
+export async function listRideRecords(limit = 20): Promise<RideRecordListResponse> {
+  const searchParams = new URLSearchParams({ limit: String(limit) });
+  const response = await fetch(`/api/v1/rides/records?${searchParams.toString()}`);
+
+  if (!response.ok) {
+    throw new Error(`ride-record-list-request-failed:${response.status}`);
+  }
+
+  return response.json() as Promise<RideRecordListResponse>;
 }
 
 function buildRidePlanRequest(request: PlannerRequest, userProfile?: UserProfile): Record<string, unknown> {

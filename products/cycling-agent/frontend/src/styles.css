@@ -468,6 +468,21 @@ h1 {
   cursor: progress;
 }
 
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.primary-button.button-link {
+  color: #ffffff;
+}
+
+.secondary-button.button-link {
+  color: var(--text);
+}
+
 .secondary-button {
   min-height: 42px;
   padding: 0 16px;

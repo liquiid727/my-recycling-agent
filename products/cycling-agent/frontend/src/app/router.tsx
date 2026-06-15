@@ -8,6 +8,9 @@ import { createBrowserRouter } from "react-router-dom";
 import HomePage from "../pages/HomePage";
 import AdminPage from "../pages/AdminPage";
 import PlanResultPage from "../pages/PlanResultPage";
+import RideRecordDetailPage from "../pages/RideRecordDetailPage";
+import RideRecordPage from "../pages/RideRecordPage";
+import RideRecordsPage from "../pages/RideRecordsPage";
 import RouteDetailPage from "../pages/RouteDetailPage";
 import SettingsPage from "../pages/SettingsPage";
 
@@ -15,6 +18,9 @@ export const router = createBrowserRouter([
   { path: "/", element: <HomePage /> },
   { path: "/admin", element: <AdminPage /> },
   { path: "/plans/:requestNo", element: <PlanResultPage /> },
+  { path: "/rides", element: <RideRecordsPage /> },
+  { path: "/rides/new", element: <RideRecordPage /> },
+  { path: "/rides/:rideRecordNo", element: <RideRecordDetailPage /> },
   { path: "/routes/:routeCode", element: <RouteDetailPage /> },
   { path: "/settings", element: <SettingsPage /> }
 ]);

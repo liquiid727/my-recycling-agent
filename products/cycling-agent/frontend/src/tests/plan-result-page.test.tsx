@@ -122,4 +122,8 @@ test("navigates from home page to saved plan result page after submit", async ()
 
   expect(await screen.findByText("推荐结果页")).toBeInTheDocument();
   expect(await screen.findByText("滨江-钱塘江休闲往返线")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "记录这次骑行" })).toHaveAttribute(
+    "href",
+    "/rides/new?sourceRequestNo=RQ-TEST0001",
+  );
 });
