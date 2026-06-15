@@ -395,6 +395,30 @@ class QueryLogEntrySchema(BaseModel):
     created_at: str
 
 
+class RideRecordSchema(BaseModel):
+    ride_record_no: str
+    entry_mode: str
+    source_request_no: str | None = None
+    ride_date: str
+    intent: str | None = Field(default=None, pattern=INTENT_PATTERN)
+    plan_kind: str | None = Field(default=None, pattern="^(route|weekend_recommendation)$")
+    route_code: str | None = None
+    route_title: str | None = None
+    origin_region: str | None = None
+    completion_status: str
+    actual_duration_hours: float | None = None
+    actual_distance_km: float | None = None
+    effort_feeling: str | None = None
+    mood_after: str | None = None
+    notes: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    created_at: str | None = None
+
+
+class RideRecordListSchema(BaseModel):
+    items: list[RideRecordSchema] = Field(default_factory=list)
+
+
 class RideRequestAuditSchema(BaseModel):
     id: str | None = None
     request_no: str

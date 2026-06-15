@@ -166,6 +166,27 @@ def _sqlite_statements() -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS ride_records (
+            ride_record_no TEXT PRIMARY KEY,
+            entry_mode TEXT NOT NULL,
+            source_request_no TEXT,
+            ride_date TEXT NOT NULL,
+            intent TEXT,
+            plan_kind TEXT,
+            route_code TEXT,
+            route_title TEXT,
+            origin_region TEXT,
+            completion_status TEXT NOT NULL,
+            actual_duration_hours REAL,
+            actual_distance_km REAL,
+            effort_feeling TEXT,
+            mood_after TEXT,
+            notes TEXT,
+            tags_json TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS ride_requests (
             id TEXT,
             request_no TEXT PRIMARY KEY,
@@ -319,6 +340,27 @@ def _postgres_statements() -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS ride_records (
+            ride_record_no TEXT PRIMARY KEY,
+            entry_mode TEXT NOT NULL,
+            source_request_no TEXT,
+            ride_date TEXT NOT NULL,
+            intent TEXT,
+            plan_kind TEXT,
+            route_code TEXT,
+            route_title TEXT,
+            origin_region TEXT,
+            completion_status TEXT NOT NULL,
+            actual_duration_hours DOUBLE PRECISION,
+            actual_distance_km DOUBLE PRECISION,
+            effort_feeling TEXT,
+            mood_after TEXT,
+            notes TEXT,
+            tags_json TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS ride_requests (
             id TEXT,
             request_no TEXT PRIMARY KEY,
@@ -427,6 +469,23 @@ def _apply_compatible_migrations(connection, database_url: str) -> None:
         "city_strategy_configs": [
             ("entity_id", "TEXT"),
             ("config_no", "TEXT"),
+        ],
+        "ride_records": [
+            ("entry_mode", "TEXT"),
+            ("source_request_no", "TEXT"),
+            ("ride_date", "TEXT"),
+            ("intent", "TEXT"),
+            ("plan_kind", "TEXT"),
+            ("route_code", "TEXT"),
+            ("route_title", "TEXT"),
+            ("origin_region", "TEXT"),
+            ("completion_status", "TEXT"),
+            ("actual_duration_hours", "DOUBLE PRECISION"),
+            ("actual_distance_km", "DOUBLE PRECISION"),
+            ("effort_feeling", "TEXT"),
+            ("mood_after", "TEXT"),
+            ("notes", "TEXT"),
+            ("tags_json", "TEXT"),
         ],
         "ride_requests": [
             ("id", "TEXT"),
