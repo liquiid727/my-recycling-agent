@@ -5,7 +5,7 @@ EN: Ride record repository that saves, fetches, and lists completed ride records
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from app.core.storage import connect
@@ -88,14 +88,7 @@ def save_ride_record(database_url: str, payload: dict[str, Any]) -> dict[str, An
 def get_ride_record(database_url: str, ride_record_no: str) -> dict[str, Any] | None:
     with connect(database_url) as connection:
         row = connection.execute(
-            """
-            SELECT ride_record_no, entry_mode, source_request_no, ride_date, intent, plan_kind, route_code, route_title,
-                   destination_name, start_point,
-                   origin_region, completion_status, actual_duration_hours, actual_distance_km, effort_feeling, mood_after,
-                   notes, tags_json, payload_json, created_at
-            FROM ride_records
-            WHERE ride_record_no = ?
-            """,
+            _ride_record_select_sql("WHERE ride_record_no = ?"),
             (ride_record_no,),
         ).fetchone()
 
@@ -105,21 +98,78 @@ def get_ride_record(database_url: str, ride_record_no: str) -> dict[str, Any] | 
 
 
 def list_ride_records(database_url: str, *, limit: int = 20) -> list[dict[str, Any]]:
+    return _list_ride_records(
+        database_url,
+        where_clause="",
+        params=(limit,),
+        suffix="ORDER BY ride_date DESC, ride_record_no DESC LIMIT ?",
+    )
+
+
+def list_ride_records_by_date_range(
+    database_url: str,
+    start_date: date,
+    end_date: date,
+) -> list[dict[str, Any]]:
+    return _list_ride_records(
+        database_url,
+        where_clause="WHERE ride_date >= ? AND ride_date < ?",
+        params=(_normalize_date_like(start_date), _normalize_date_like(end_date)),
+        suffix="ORDER BY ride_date DESC, ride_record_no DESC",
+    )
+
+
+def list_recent_non_cancelled_ride_records(
+    database_url: str,
+    *,
+    before_date: date,
+    lookback_days: int,
+    limit: int,
+) -> list[dict[str, Any]]:
+    start_date = before_date - timedelta(days=lookback_days)
+    return _list_ride_records(
+        database_url,
+        where_clause="""
+            WHERE ride_date >= ?
+              AND ride_date < ?
+              AND completion_status != ?
+        """,
+        params=(
+            _normalize_date_like(start_date),
+            _normalize_date_like(before_date),
+            "cancelled",
+            limit,
+        ),
+        suffix="ORDER BY ride_date DESC, ride_record_no DESC LIMIT ?",
+    )
+
+
+def _list_ride_records(
+    database_url: str,
+    *,
+    where_clause: str,
+    params: tuple[Any, ...],
+    suffix: str,
+) -> list[dict[str, Any]]:
     with connect(database_url) as connection:
         rows = connection.execute(
-            """
-            SELECT ride_record_no, entry_mode, source_request_no, ride_date, intent, plan_kind, route_code, route_title,
-                   destination_name, start_point,
-                   origin_region, completion_status, actual_duration_hours, actual_distance_km, effort_feeling, mood_after,
-                   notes, tags_json, payload_json, created_at
-            FROM ride_records
-            ORDER BY ride_date DESC, ride_record_no DESC
-            LIMIT ?
-            """,
-            (limit,),
+            _ride_record_select_sql(where_clause, suffix),
+            params,
         ).fetchall()
 
     return [_hydrate_ride_record(row) for row in rows]
+
+
+def _ride_record_select_sql(where_clause: str, suffix: str = "") -> str:
+    return f"""
+        SELECT ride_record_no, entry_mode, source_request_no, ride_date, intent, plan_kind, route_code, route_title,
+               destination_name, start_point,
+               origin_region, completion_status, actual_duration_hours, actual_distance_km, effort_feeling, mood_after,
+               notes, tags_json, payload_json, created_at
+        FROM ride_records
+        {where_clause}
+        {suffix}
+    """
 
 
 def _hydrate_ride_record(row: dict[str, Any]) -> dict[str, Any]:

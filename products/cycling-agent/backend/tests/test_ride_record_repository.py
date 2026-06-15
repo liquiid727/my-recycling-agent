@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import date
 from importlib import import_module
 
 import pytest
@@ -135,6 +136,113 @@ def test_legacy_sqlite_ride_record_rows_hydrate_with_safe_defaults(tmp_path) -> 
     assert listed == [hydrated]
 
 
+def test_list_ride_records_by_date_range_returns_only_records_inside_month(tmp_path) -> None:
+    database_url = f"sqlite:///{tmp_path / 'cycling-agent.db'}"
+    init_storage(database_url)
+
+    repository = _load_repository_module()
+    assert repository is not None
+    assert hasattr(repository, "list_ride_records_by_date_range")
+
+    _save_ride_record(
+        repository,
+        database_url,
+        ride_record_no="RR-20260531-001",
+        ride_date="2026-05-31",
+        completion_status="completed",
+    )
+    june_first = _save_ride_record(
+        repository,
+        database_url,
+        ride_record_no="RR-20260601-001",
+        ride_date="2026-06-01",
+        completion_status="completed",
+    )
+    june_mid = _save_ride_record(
+        repository,
+        database_url,
+        ride_record_no="RR-20260615-001",
+        ride_date="2026-06-15",
+        completion_status="shortened",
+    )
+    june_last = _save_ride_record(
+        repository,
+        database_url,
+        ride_record_no="RR-20260630-001",
+        ride_date="2026-06-30",
+        completion_status="completed",
+    )
+    _save_ride_record(
+        repository,
+        database_url,
+        ride_record_no="RR-20260701-001",
+        ride_date="2026-07-01",
+        completion_status="completed",
+    )
+
+    records = repository.list_ride_records_by_date_range(
+        database_url,
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 7, 1),
+    )
+
+    assert records == [june_last, june_mid, june_first]
+
+
+def test_list_recent_non_cancelled_ride_records_skips_cancelled_records(tmp_path) -> None:
+    database_url = f"sqlite:///{tmp_path / 'cycling-agent.db'}"
+    init_storage(database_url)
+
+    repository = _load_repository_module()
+    assert repository is not None
+    assert hasattr(repository, "list_recent_non_cancelled_ride_records")
+
+    _save_ride_record(
+        repository,
+        database_url,
+        ride_record_no="RR-20260616-001",
+        ride_date="2026-06-16",
+        completion_status="completed",
+    )
+    _save_ride_record(
+        repository,
+        database_url,
+        ride_record_no="RR-20260629-001",
+        ride_date="2026-06-29",
+        completion_status="cancelled",
+    )
+    june_thirtieth = _save_ride_record(
+        repository,
+        database_url,
+        ride_record_no="RR-20260630-001",
+        ride_date="2026-06-30",
+        completion_status="shortened",
+    )
+    june_twenty_eighth = _save_ride_record(
+        repository,
+        database_url,
+        ride_record_no="RR-20260628-001",
+        ride_date="2026-06-28",
+        completion_status="completed",
+    )
+    _save_ride_record(
+        repository,
+        database_url,
+        ride_record_no="RR-20260701-001",
+        ride_date="2026-07-01",
+        completion_status="completed",
+    )
+
+    records = repository.list_recent_non_cancelled_ride_records(
+        database_url,
+        before_date=date(2026, 7, 1),
+        lookback_days=7,
+        limit=10,
+    )
+
+    assert records == [june_thirtieth, june_twenty_eighth]
+
+
 def test_create_ride_record_request_schema_enforces_flat_contract() -> None:
     payload = CreateRideRecordRequestSchema(
         entry_mode="planned",
@@ -193,6 +301,65 @@ def test_create_ride_record_request_schema_enforces_flat_contract() -> None:
             completion_status="completed",
             effort_feeling="steady",
             mood_after="steady",
+        )
+
+
+def test_ride_monthly_summary_response_schema_enforces_contract() -> None:
+    ride_plan_module = import_module("app.schemas.ride_plan")
+    assert hasattr(ride_plan_module, "RideMonthlySummaryActionSchema")
+    assert hasattr(ride_plan_module, "RideMonthlySummaryPayloadSchema")
+    assert hasattr(ride_plan_module, "RideMonthlySummaryResponseSchema")
+
+    action_schema = ride_plan_module.RideMonthlySummaryActionSchema
+    payload_schema = ride_plan_module.RideMonthlySummaryPayloadSchema
+    response_schema = ride_plan_module.RideMonthlySummaryResponseSchema
+
+    response = response_schema.model_validate(
+        {
+            "summary": payload_schema.model_validate(
+                {
+                    "month": "2026-06",
+                    "total_rides": 4,
+                    "completed_rides": 3,
+                    "shortened_rides": 1,
+                    "cancelled_rides": 0,
+                    "total_distance_km": 128.5,
+                    "total_duration_hours": 8.2,
+                    "habit_status": "steady",
+                    "recommended_action": action_schema.model_validate(
+                        {
+                            "action_key": "maintain_weekly_rhythm",
+                            "title": "保持每周固定一次短骑",
+                            "description": "先稳住频率，再逐步加距离。",
+                            "suggested_scene": "city_ride",
+                        }
+                    ),
+                }
+            )
+        }
+    )
+
+    assert response.summary.month == "2026-06"
+    assert response.summary.recommended_action.action_key == "maintain_weekly_rhythm"
+
+    with pytest.raises(ValidationError):
+        payload_schema.model_validate(
+            {
+                "month": "2026/06",
+                "total_rides": -1,
+                "completed_rides": 0,
+                "shortened_rides": 0,
+                "cancelled_rides": 0,
+                "total_distance_km": 0,
+                "total_duration_hours": 0,
+                "habit_status": "steady",
+                "recommended_action": {
+                    "action_key": "maintain_weekly_rhythm",
+                    "title": "保持每周固定一次短骑",
+                    "description": "先稳住频率，再逐步加距离。",
+                    "suggested_scene": "city_ride",
+                },
+            }
         )
 
 
@@ -277,3 +444,35 @@ def _load_repository_module():
         return import_module("app.repositories.ride_record_repository")
     except ModuleNotFoundError:
         return None
+
+
+def _save_ride_record(
+    repository,
+    database_url: str,
+    *,
+    ride_record_no: str,
+    ride_date: str,
+    completion_status: str,
+) -> dict:
+    payload = {
+        "ride_record_no": ride_record_no,
+        "entry_mode": "manual",
+        "source_request_no": None,
+        "ride_date": ride_date,
+        "intent": "ride_today",
+        "plan_kind": "route",
+        "route_code": f"ROUTE-{ride_record_no}",
+        "route_title": f"Route {ride_record_no}",
+        "destination_name": "钱塘江南岸",
+        "start_point": "闻涛路滨江段",
+        "origin_region": "滨江",
+        "completion_status": completion_status,
+        "actual_duration_hours": 2.0,
+        "actual_distance_km": 35.0,
+        "effort_feeling": "steady",
+        "mood_after": "normal",
+        "notes": None,
+        "tags": ["test"],
+    }
+    repository.save_ride_record(database_url, payload)
+    return payload

@@ -15,6 +15,12 @@ RIDE_RECORD_ENTRY_MODE_PATTERN = "^(planned|manual)$"
 RIDE_RECORD_COMPLETION_STATUS_PATTERN = "^(completed|shortened|cancelled)$"
 RIDE_RECORD_EFFORT_FEELING_PATTERN = "^(easy|steady|hard)$"
 RIDE_RECORD_MOOD_AFTER_PATTERN = "^(refreshed|normal|tired)$"
+RIDE_MONTHLY_SUMMARY_ACTION_KEY_PATTERN = (
+    "^(schedule_easy_city_ride|resume_with_short_ride|maintain_weekly_rhythm|take_recovery_window)$"
+)
+RIDE_MONTHLY_SUMMARY_SCENE_PATTERN = "^(city_ride|weekend_trip)$"
+RIDE_MONTHLY_SUMMARY_MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
+RIDE_MONTHLY_SUMMARY_HABIT_STATUS_PATTERN = "^(starting|rebuilding|steady|overreaching)$"
 
 
 class UserProfilePayload(BaseModel):
@@ -409,6 +415,29 @@ class RideSummarySchema(BaseModel):
     next_ride_prompt: str
     plan_alignment: str | None = None
     confidence_notes: list[str] = Field(default_factory=list)
+
+
+class RideMonthlySummaryActionSchema(BaseModel):
+    action_key: str = Field(pattern=RIDE_MONTHLY_SUMMARY_ACTION_KEY_PATTERN)
+    title: str
+    description: str
+    suggested_scene: str = Field(pattern=RIDE_MONTHLY_SUMMARY_SCENE_PATTERN)
+
+
+class RideMonthlySummaryPayloadSchema(BaseModel):
+    month: str = Field(pattern=RIDE_MONTHLY_SUMMARY_MONTH_PATTERN)
+    total_rides: int = Field(ge=0)
+    completed_rides: int = Field(ge=0)
+    shortened_rides: int = Field(ge=0)
+    cancelled_rides: int = Field(ge=0)
+    total_distance_km: float = Field(ge=0)
+    total_duration_hours: float = Field(ge=0)
+    habit_status: str = Field(pattern=RIDE_MONTHLY_SUMMARY_HABIT_STATUS_PATTERN)
+    recommended_action: RideMonthlySummaryActionSchema
+
+
+class RideMonthlySummaryResponseSchema(BaseModel):
+    summary: RideMonthlySummaryPayloadSchema
 
 
 class RideRecordPayload(BaseModel):
