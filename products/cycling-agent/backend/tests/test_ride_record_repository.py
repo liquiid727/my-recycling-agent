@@ -6,7 +6,11 @@ from __future__ import annotations
 
 from importlib import import_module
 
+import pytest
+from pydantic import ValidationError
+
 from app.core.storage import init_storage
+from app.schemas.ride_plan import CreateRideRecordRequestSchema
 
 
 def test_save_and_list_ride_records(tmp_path) -> None:
@@ -60,6 +64,49 @@ def test_save_and_list_ride_records(tmp_path) -> None:
 
     listed = repository.list_ride_records(database_url)
     assert listed == [payload]
+
+
+def test_create_ride_record_request_schema_enforces_flat_contract() -> None:
+    payload = CreateRideRecordRequestSchema(
+        entry_mode="planned",
+        source_request_no="RQ-TEST-001",
+        ride_date="2026-06-15",
+        route_code="DYN-HANGZHOU-001",
+        route_title="闻涛路晚风线",
+        destination_name="钱塘江南岸",
+        start_point="闻涛路滨江段",
+        origin_region="滨江",
+        completion_status="completed",
+        actual_duration_hours=2.5,
+        actual_distance_km=48.2,
+        effort_feeling="steady",
+        mood_after="normal",
+        notes="记录一次按计划完成的骑行。",
+        tags=["evening", "riverside"],
+    )
+
+    assert payload.entry_mode == "planned"
+    assert payload.completion_status == "completed"
+    assert payload.effort_feeling == "steady"
+    assert payload.mood_after == "normal"
+
+    with pytest.raises(ValidationError):
+        CreateRideRecordRequestSchema(
+            entry_mode="linked_plan",
+            ride_date="2026-06-15",
+            completion_status="completed",
+            effort_feeling="steady",
+            mood_after="normal",
+        )
+
+    with pytest.raises(ValidationError):
+        CreateRideRecordRequestSchema(
+            entry_mode="planned",
+            ride_date="2026-06-15",
+            completion_status="completed",
+            effort_feeling="moderate",
+            mood_after="normal",
+        )
 
 
 def _load_repository_module():

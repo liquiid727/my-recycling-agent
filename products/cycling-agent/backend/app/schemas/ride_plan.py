@@ -11,10 +11,10 @@ from pydantic import BaseModel, Field
 
 INTENT_PATTERN = "^(ride_today|ride_plan|weekend_recommendation)$"
 PLAN_KIND_PATTERN = "^(route|weekend_recommendation)$"
-RIDE_RECORD_ENTRY_MODE_PATTERN = "^(manual|linked_plan|imported)$"
-RIDE_RECORD_COMPLETION_STATUS_PATTERN = "^(completed|partial|abandoned)$"
-RIDE_RECORD_EFFORT_FEELING_PATTERN = "^(easy|moderate|hard|exhausted)$"
-RIDE_RECORD_MOOD_AFTER_PATTERN = "^(refreshed|steady|tired|spent)$"
+RIDE_RECORD_ENTRY_MODE_PATTERN = "^(planned|manual)$"
+RIDE_RECORD_COMPLETION_STATUS_PATTERN = "^(completed|shortened|cancelled)$"
+RIDE_RECORD_EFFORT_FEELING_PATTERN = "^(easy|steady|hard)$"
+RIDE_RECORD_MOOD_AFTER_PATTERN = "^(refreshed|normal|tired)$"
 
 
 class UserProfilePayload(BaseModel):
@@ -401,17 +401,14 @@ class QueryLogEntrySchema(BaseModel):
 
 
 class RideSummarySchema(BaseModel):
-    ride_record_no: str
-    ride_date: date
-    route_title: str | None = None
-    destination_name: str | None = None
-    start_point: str | None = None
-    completion_status: str = Field(pattern=RIDE_RECORD_COMPLETION_STATUS_PATTERN)
-    actual_duration_hours: float | None = None
-    actual_distance_km: float | None = None
-    effort_feeling: str = Field(pattern=RIDE_RECORD_EFFORT_FEELING_PATTERN)
-    mood_after: str = Field(pattern=RIDE_RECORD_MOOD_AFTER_PATTERN)
-    tags: list[str] = Field(default_factory=list)
+    headline: str
+    summary: str
+    completion_assessment: str
+    effort_assessment: str
+    recovery_advice: str
+    next_ride_prompt: str
+    plan_alignment: str | None = None
+    confidence_notes: list[str] = Field(default_factory=list)
 
 
 class RideRecordPayload(BaseModel):
@@ -433,20 +430,33 @@ class RideRecordPayload(BaseModel):
     mood_after: str = Field(pattern=RIDE_RECORD_MOOD_AFTER_PATTERN)
     notes: str | None = None
     tags: list[str] = Field(default_factory=list)
-    payload: dict = Field(default_factory=dict)
-    created_at: str | None = None
-    updated_at: str | None = None
 
 
 class CreateRideRecordRequestSchema(BaseModel):
-    record: RideRecordPayload
-
-
-class RideRecordListItemSchema(RideSummarySchema):
     entry_mode: str = Field(pattern=RIDE_RECORD_ENTRY_MODE_PATTERN)
     source_request_no: str | None = None
+    ride_date: date
     route_code: str | None = None
+    route_title: str | None = None
+    destination_name: str | None = None
+    start_point: str | None = None
     origin_region: str | None = None
+    completion_status: str = Field(pattern=RIDE_RECORD_COMPLETION_STATUS_PATTERN)
+    actual_duration_hours: float | None = None
+    actual_distance_km: float | None = None
+    effort_feeling: str = Field(pattern=RIDE_RECORD_EFFORT_FEELING_PATTERN)
+    mood_after: str = Field(pattern=RIDE_RECORD_MOOD_AFTER_PATTERN)
+    notes: str | None = None
+    tags: list[str] = Field(default_factory=list)
+
+
+class RideRecordListItemSchema(BaseModel):
+    ride_record_no: str
+    ride_date: date
+    route_title: str | None = None
+    destination_name: str | None = None
+    completion_status: str
+    summary_headline: str | None = None
 
 
 class RideRecordListResponseSchema(BaseModel):
@@ -454,7 +464,8 @@ class RideRecordListResponseSchema(BaseModel):
 
 
 class RideRecordDetailResponseSchema(BaseModel):
-    record: RideRecordPayload
+    ride_record: RideRecordPayload
+    ride_summary: RideSummarySchema
 
 
 class RideRequestAuditSchema(BaseModel):
