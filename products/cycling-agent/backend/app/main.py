@@ -8,6 +8,7 @@ from app.api.routes.admin import router as admin_router
 from app.api.routes.profile import router as profile_router
 from app.api.routes.ride_chat import router as ride_chat_router
 from app.api.routes.ride_plan import router as ride_plan_router
+from app.api.routes.ride_record import router as ride_record_router
 from app.api.routes.route_catalog import router as route_catalog_router
 from app.core.cache import build_cache_backend
 from app.core.config import Settings
@@ -50,6 +51,7 @@ def create_app(*, weather_provider: OpenMeteoWeatherProvider | None = None, rout
     )
     app.include_router(ride_chat_router)
     app.include_router(ride_plan_router)
+    app.include_router(ride_record_router)
     app.include_router(route_catalog_router)
     app.include_router(profile_router)
     app.include_router(admin_router)
