@@ -175,15 +175,19 @@ def _sqlite_statements() -> list[str]:
             plan_kind TEXT,
             route_code TEXT,
             route_title TEXT,
+            destination_name TEXT,
+            start_point TEXT,
             origin_region TEXT,
             completion_status TEXT NOT NULL,
             actual_duration_hours REAL,
             actual_distance_km REAL,
-            effort_feeling TEXT,
-            mood_after TEXT,
+            effort_feeling TEXT NOT NULL,
+            mood_after TEXT NOT NULL,
             notes TEXT,
             tags_json TEXT NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            payload_json TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """,
         """
@@ -349,15 +353,19 @@ def _postgres_statements() -> list[str]:
             plan_kind TEXT,
             route_code TEXT,
             route_title TEXT,
+            destination_name TEXT,
+            start_point TEXT,
             origin_region TEXT,
             completion_status TEXT NOT NULL,
             actual_duration_hours DOUBLE PRECISION,
             actual_distance_km DOUBLE PRECISION,
-            effort_feeling TEXT,
-            mood_after TEXT,
+            effort_feeling TEXT NOT NULL,
+            mood_after TEXT NOT NULL,
             notes TEXT,
             tags_json TEXT NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            payload_json TEXT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         )
         """,
         """
@@ -478,14 +486,18 @@ def _apply_compatible_migrations(connection, database_url: str) -> None:
             ("plan_kind", "TEXT"),
             ("route_code", "TEXT"),
             ("route_title", "TEXT"),
+            ("destination_name", "TEXT"),
+            ("start_point", "TEXT"),
             ("origin_region", "TEXT"),
             ("completion_status", "TEXT"),
             ("actual_duration_hours", "DOUBLE PRECISION"),
             ("actual_distance_km", "DOUBLE PRECISION"),
-            ("effort_feeling", "TEXT"),
-            ("mood_after", "TEXT"),
+            ("effort_feeling", "TEXT NOT NULL DEFAULT ''"),
+            ("mood_after", "TEXT NOT NULL DEFAULT ''"),
             ("notes", "TEXT"),
             ("tags_json", "TEXT"),
+            ("payload_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("updated_at", "TEXT DEFAULT CURRENT_TIMESTAMP"),
         ],
         "ride_requests": [
             ("id", "TEXT"),
@@ -506,6 +518,8 @@ def _apply_compatible_migrations(connection, database_url: str) -> None:
             if column_name in existing:
                 continue
             connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
+    if _list_columns(connection, database_url, "ride_records"):
+        _backfill_ride_record_defaults(connection)
 
 
 def _list_columns(connection, database_url: str, table_name: str) -> set[str]:
@@ -530,3 +544,11 @@ def _list_columns(connection, database_url: str, table_name: str) -> set[str]:
         if values:
             columns.add(str(values[0]))
     return columns
+
+
+def _backfill_ride_record_defaults(connection) -> None:
+    connection.execute("UPDATE ride_records SET effort_feeling = '' WHERE effort_feeling IS NULL")
+    connection.execute("UPDATE ride_records SET mood_after = '' WHERE mood_after IS NULL")
+    connection.execute("UPDATE ride_records SET tags_json = '[]' WHERE tags_json IS NULL")
+    connection.execute("UPDATE ride_records SET payload_json = '{}' WHERE payload_json IS NULL")
+    connection.execute("UPDATE ride_records SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL")

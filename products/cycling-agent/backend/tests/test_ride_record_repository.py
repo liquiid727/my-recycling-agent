@@ -28,6 +28,8 @@ def test_save_and_list_ride_records(tmp_path) -> None:
         "plan_kind": "route",
         "route_code": "DYN-HANGZHOU-001",
         "route_title": "闻涛路晚风线",
+        "destination_name": "钱塘江南岸",
+        "start_point": "闻涛路滨江段",
         "origin_region": "滨江",
         "completion_status": "completed",
         "actual_duration_hours": 2.5,
@@ -36,12 +38,25 @@ def test_save_and_list_ride_records(tmp_path) -> None:
         "mood_after": "refreshed",
         "notes": "风不大，江边体感不错。",
         "tags": ["evening", "riverside"],
+        "payload": {
+            "ride_summary": {
+                "destination_name": "钱塘江南岸",
+                "start_point": "闻涛路滨江段",
+                "completion_status": "completed",
+            },
+            "route_snapshot": {
+                "route_code": "DYN-HANGZHOU-001",
+                "route_title": "闻涛路晚风线",
+            },
+            "extra_notes": ["补给正常", "路面顺"],
+        },
     }
 
     repository.save_ride_record(database_url, payload)
 
     saved = repository.get_ride_record(database_url, "RR-20260615-001")
     assert saved == payload
+    assert saved["payload"]["route_snapshot"]["route_title"] == "闻涛路晚风线"
 
     listed = repository.list_ride_records(database_url)
     assert listed == [payload]

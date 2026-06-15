@@ -10,6 +10,11 @@ from pydantic import BaseModel, Field
 
 
 INTENT_PATTERN = "^(ride_today|ride_plan|weekend_recommendation)$"
+PLAN_KIND_PATTERN = "^(route|weekend_recommendation)$"
+RIDE_RECORD_ENTRY_MODE_PATTERN = "^(manual|linked_plan|imported)$"
+RIDE_RECORD_COMPLETION_STATUS_PATTERN = "^(completed|partial|abandoned)$"
+RIDE_RECORD_EFFORT_FEELING_PATTERN = "^(easy|moderate|hard|exhausted)$"
+RIDE_RECORD_MOOD_AFTER_PATTERN = "^(refreshed|steady|tired|spent)$"
 
 
 class UserProfilePayload(BaseModel):
@@ -395,28 +400,61 @@ class QueryLogEntrySchema(BaseModel):
     created_at: str
 
 
-class RideRecordSchema(BaseModel):
+class RideSummarySchema(BaseModel):
     ride_record_no: str
-    entry_mode: str
-    source_request_no: str | None = None
-    ride_date: str
-    intent: str | None = Field(default=None, pattern=INTENT_PATTERN)
-    plan_kind: str | None = Field(default=None, pattern="^(route|weekend_recommendation)$")
-    route_code: str | None = None
+    ride_date: date
     route_title: str | None = None
-    origin_region: str | None = None
-    completion_status: str
+    destination_name: str | None = None
+    start_point: str | None = None
+    completion_status: str = Field(pattern=RIDE_RECORD_COMPLETION_STATUS_PATTERN)
     actual_duration_hours: float | None = None
     actual_distance_km: float | None = None
-    effort_feeling: str | None = None
-    mood_after: str | None = None
+    effort_feeling: str = Field(pattern=RIDE_RECORD_EFFORT_FEELING_PATTERN)
+    mood_after: str = Field(pattern=RIDE_RECORD_MOOD_AFTER_PATTERN)
+    tags: list[str] = Field(default_factory=list)
+
+
+class RideRecordPayload(BaseModel):
+    ride_record_no: str
+    entry_mode: str = Field(pattern=RIDE_RECORD_ENTRY_MODE_PATTERN)
+    source_request_no: str | None = None
+    ride_date: date
+    intent: str | None = Field(default=None, pattern=INTENT_PATTERN)
+    plan_kind: str | None = Field(default=None, pattern=PLAN_KIND_PATTERN)
+    route_code: str | None = None
+    route_title: str | None = None
+    destination_name: str | None = None
+    start_point: str | None = None
+    origin_region: str | None = None
+    completion_status: str = Field(pattern=RIDE_RECORD_COMPLETION_STATUS_PATTERN)
+    actual_duration_hours: float | None = None
+    actual_distance_km: float | None = None
+    effort_feeling: str = Field(pattern=RIDE_RECORD_EFFORT_FEELING_PATTERN)
+    mood_after: str = Field(pattern=RIDE_RECORD_MOOD_AFTER_PATTERN)
     notes: str | None = None
     tags: list[str] = Field(default_factory=list)
+    payload: dict = Field(default_factory=dict)
     created_at: str | None = None
+    updated_at: str | None = None
 
 
-class RideRecordListSchema(BaseModel):
-    items: list[RideRecordSchema] = Field(default_factory=list)
+class CreateRideRecordRequestSchema(BaseModel):
+    record: RideRecordPayload
+
+
+class RideRecordListItemSchema(RideSummarySchema):
+    entry_mode: str = Field(pattern=RIDE_RECORD_ENTRY_MODE_PATTERN)
+    source_request_no: str | None = None
+    route_code: str | None = None
+    origin_region: str | None = None
+
+
+class RideRecordListResponseSchema(BaseModel):
+    items: list[RideRecordListItemSchema] = Field(default_factory=list)
+
+
+class RideRecordDetailResponseSchema(BaseModel):
+    record: RideRecordPayload
 
 
 class RideRequestAuditSchema(BaseModel):

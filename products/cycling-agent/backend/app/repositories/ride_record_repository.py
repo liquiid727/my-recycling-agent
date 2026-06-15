@@ -11,8 +11,7 @@ from app.core.storage import connect
 
 
 def save_ride_record(database_url: str, payload: dict[str, Any]) -> dict[str, Any]:
-    normalized = dict(payload)
-    normalized["tags"] = list(normalized.get("tags", []))
+    normalized = _normalize_ride_record_payload(payload)
 
     with connect(database_url) as connection:
         connection.execute(
@@ -26,6 +25,8 @@ def save_ride_record(database_url: str, payload: dict[str, Any]) -> dict[str, An
                 plan_kind,
                 route_code,
                 route_title,
+                destination_name,
+                start_point,
                 origin_region,
                 completion_status,
                 actual_duration_hours,
@@ -33,9 +34,10 @@ def save_ride_record(database_url: str, payload: dict[str, Any]) -> dict[str, An
                 effort_feeling,
                 mood_after,
                 notes,
-                tags_json
+                tags_json,
+                payload_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(ride_record_no) DO UPDATE SET
                 entry_mode = excluded.entry_mode,
                 source_request_no = excluded.source_request_no,
@@ -44,6 +46,8 @@ def save_ride_record(database_url: str, payload: dict[str, Any]) -> dict[str, An
                 plan_kind = excluded.plan_kind,
                 route_code = excluded.route_code,
                 route_title = excluded.route_title,
+                destination_name = excluded.destination_name,
+                start_point = excluded.start_point,
                 origin_region = excluded.origin_region,
                 completion_status = excluded.completion_status,
                 actual_duration_hours = excluded.actual_duration_hours,
@@ -51,7 +55,9 @@ def save_ride_record(database_url: str, payload: dict[str, Any]) -> dict[str, An
                 effort_feeling = excluded.effort_feeling,
                 mood_after = excluded.mood_after,
                 notes = excluded.notes,
-                tags_json = excluded.tags_json
+                tags_json = excluded.tags_json,
+                payload_json = excluded.payload_json,
+                updated_at = CURRENT_TIMESTAMP
             """,
             (
                 normalized["ride_record_no"],
@@ -62,6 +68,8 @@ def save_ride_record(database_url: str, payload: dict[str, Any]) -> dict[str, An
                 normalized.get("plan_kind"),
                 normalized.get("route_code"),
                 normalized.get("route_title"),
+                normalized.get("destination_name"),
+                normalized.get("start_point"),
                 normalized.get("origin_region"),
                 normalized["completion_status"],
                 normalized.get("actual_duration_hours"),
@@ -70,6 +78,7 @@ def save_ride_record(database_url: str, payload: dict[str, Any]) -> dict[str, An
                 normalized.get("mood_after"),
                 normalized.get("notes"),
                 json.dumps(normalized["tags"], ensure_ascii=False),
+                json.dumps(normalized, ensure_ascii=False),
             ),
         )
     return normalized
@@ -80,8 +89,9 @@ def get_ride_record(database_url: str, ride_record_no: str) -> dict[str, Any] | 
         row = connection.execute(
             """
             SELECT ride_record_no, entry_mode, source_request_no, ride_date, intent, plan_kind, route_code, route_title,
+                   destination_name, start_point,
                    origin_region, completion_status, actual_duration_hours, actual_distance_km, effort_feeling, mood_after,
-                   notes, tags_json
+                   notes, tags_json, payload_json
             FROM ride_records
             WHERE ride_record_no = ?
             """,
@@ -98,8 +108,9 @@ def list_ride_records(database_url: str, *, limit: int = 20) -> list[dict[str, A
         rows = connection.execute(
             """
             SELECT ride_record_no, entry_mode, source_request_no, ride_date, intent, plan_kind, route_code, route_title,
+                   destination_name, start_point,
                    origin_region, completion_status, actual_duration_hours, actual_distance_km, effort_feeling, mood_after,
-                   notes, tags_json
+                   notes, tags_json, payload_json
             FROM ride_records
             ORDER BY ride_date DESC, ride_record_no DESC
             LIMIT ?
@@ -111,6 +122,9 @@ def list_ride_records(database_url: str, *, limit: int = 20) -> list[dict[str, A
 
 
 def _hydrate_ride_record(row: dict[str, Any]) -> dict[str, Any]:
+    payload_json = row["payload_json"] if "payload_json" in row.keys() else None
+    if payload_json and payload_json != "{}":
+        return json.loads(payload_json)
     return {
         "ride_record_no": row["ride_record_no"],
         "entry_mode": row["entry_mode"],
@@ -120,6 +134,8 @@ def _hydrate_ride_record(row: dict[str, Any]) -> dict[str, Any]:
         "plan_kind": row["plan_kind"],
         "route_code": row["route_code"],
         "route_title": row["route_title"],
+        "destination_name": row["destination_name"],
+        "start_point": row["start_point"],
         "origin_region": row["origin_region"],
         "completion_status": row["completion_status"],
         "actual_duration_hours": row["actual_duration_hours"],
@@ -128,4 +144,19 @@ def _hydrate_ride_record(row: dict[str, Any]) -> dict[str, Any]:
         "mood_after": row["mood_after"],
         "notes": row["notes"],
         "tags": json.loads(row["tags_json"]),
+        "payload": {},
     }
+
+
+def _normalize_ride_record_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+    normalized["ride_date"] = _normalize_date_like(normalized.get("ride_date"))
+    normalized["tags"] = list(normalized.get("tags", []))
+    normalized["payload"] = dict(normalized.get("payload", {}))
+    return normalized
+
+
+def _normalize_date_like(value: Any) -> Any:
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
