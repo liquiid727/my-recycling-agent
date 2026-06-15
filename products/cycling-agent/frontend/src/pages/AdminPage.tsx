@@ -108,6 +108,7 @@ export default function AdminPage() {
     route_notes: "后台录入样例。"
   });
   const [strategyForm, setStrategyForm] = useState({
+    config_type: "risk_bias",
     config_key: "",
     config_json: '{"district_tags":["西湖"],"crowd_risk_delta":0.2}'
   });
@@ -159,6 +160,9 @@ export default function AdminPage() {
     });
   }, []);
 
+  const decisionStrategies = strategies.filter((item) => item.config_type !== "presentation_template");
+  const presentationStrategies = strategies.filter((item) => item.config_type === "presentation_template");
+
   async function submitRoute(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = {
@@ -205,7 +209,7 @@ export default function AdminPage() {
     event.preventDefault();
     const payload = {
       city_code: "hangzhou",
-      config_type: "risk_bias",
+      config_type: strategyForm.config_type,
       config_key: strategyForm.config_key,
       config_value: JSON.parse(strategyForm.config_json),
       status: "active"
@@ -286,9 +290,9 @@ export default function AdminPage() {
     <main className="page-shell">
       <ThemeToggle />
       <section className="hero-panel">
-        <p className="eyebrow">Admin Workspace</p>
-        <h1>后台维护面</h1>
-        <p className="hero-copy">最小后台能力：路线模板录入、城市策略维护、查询日志查看。</p>
+        <p className="eyebrow">Companion Admin</p>
+        <h1>骑行陪伴资产后台</h1>
+        <p className="hero-copy">按决策规则、路线资产、周末资产、陪伴话术四个桶维护骑行陪伴产品。</p>
         <p className="hero-link-row">
           <Link to="/">返回规划页</Link>
         </p>
@@ -297,8 +301,8 @@ export default function AdminPage() {
       <section className="success-layout">
         <article className="detail-panel">
           <div className="section-heading">
-            <p className="section-kicker">Routes</p>
-            <h3>路线模板录入与维护</h3>
+            <p className="section-kicker">Route Assets</p>
+            <h3>路线模板、补给与撤退资产</h3>
           </div>
           <form className="planner-form" onSubmit={submitRoute}>
             <label className="field-label" htmlFor="route-code">
@@ -388,10 +392,22 @@ export default function AdminPage() {
 
         <article className="detail-panel">
           <div className="section-heading">
-            <p className="section-kicker">City Strategy</p>
-            <h3>城市策略配置</h3>
+            <p className="section-kicker">Decision Rules</p>
+            <h3>澄清与推荐偏置规则</h3>
           </div>
           <form className="planner-form" onSubmit={submitStrategy}>
+            <label className="field-label" htmlFor="strategy-type">
+              规则类别
+            </label>
+            <select
+              id="strategy-type"
+              value={strategyForm.config_type}
+              onChange={(event) => setStrategyForm((current) => ({ ...current, config_type: event.target.value }))}
+            >
+              <option value="risk_bias">推荐偏置</option>
+              <option value="clarification_rule">澄清规则</option>
+              <option value="presentation_template">陪伴话术</option>
+            </select>
             <label className="field-label" htmlFor="strategy-key">
               策略键
             </label>
@@ -418,7 +434,7 @@ export default function AdminPage() {
             </div>
           </form>
           <div className="admin-list">
-            {strategies.map((strategy) => (
+            {decisionStrategies.map((strategy) => (
               <article className="alternative-card" key={strategy.config_key}>
                 <strong>{strategy.config_key}</strong>
                 <span>{strategy.config_type}</span>
@@ -430,8 +446,8 @@ export default function AdminPage() {
 
         <article className="detail-panel">
           <div className="section-heading">
-            <p className="section-kicker">Risk Rules</p>
-            <h3>风险规则维护</h3>
+            <p className="section-kicker">Decision Rules</p>
+            <h3>风险与降级规则</h3>
           </div>
           <form className="planner-form" onSubmit={submitRiskRule}>
             <label className="field-label" htmlFor="risk-rule-key">
@@ -472,8 +488,8 @@ export default function AdminPage() {
 
         <article className="detail-panel">
           <div className="section-heading">
-            <p className="section-kicker">Nearby Destinations</p>
-            <h3>周边目的地模板维护</h3>
+            <p className="section-kicker">Weekend Assets</p>
+            <h3>周边目的地资产</h3>
           </div>
           <form className="planner-form" onSubmit={submitDestination}>
             <label className="field-label" htmlFor="destination-no">
@@ -521,8 +537,8 @@ export default function AdminPage() {
 
         <article className="detail-panel">
           <div className="section-heading">
-            <p className="section-kicker">Trip Templates</p>
-            <h3>周边游方案模板维护</h3>
+            <p className="section-kicker">Weekend Assets</p>
+            <h3>周末方案模板</h3>
           </div>
           <form className="planner-form" onSubmit={submitTripTemplate}>
             <label className="field-label" htmlFor="trip-no">
@@ -570,7 +586,24 @@ export default function AdminPage() {
 
         <article className="detail-panel">
           <div className="section-heading">
-            <p className="section-kicker">Query Logs</p>
+            <p className="section-kicker">Agent Presentation Assets</p>
+            <h3>推荐话术与降级话术</h3>
+          </div>
+          <p className="summary-copy">使用上面的规则配置，选择“陪伴话术”后保存，就能把推荐语气和降级提示逐步从代码迁到结构化资产。</p>
+          <div className="admin-list">
+            {presentationStrategies.map((strategy) => (
+              <article className="alternative-card" key={strategy.config_key}>
+                <strong>{strategy.config_key}</strong>
+                <span>{strategy.config_type}</span>
+                <pre className="parsed-json">{JSON.stringify(strategy.config_value, null, 2)}</pre>
+              </article>
+            ))}
+          </div>
+        </article>
+
+        <article className="detail-panel">
+          <div className="section-heading">
+            <p className="section-kicker">Decision Audit</p>
             <h3>查询日志记录</h3>
           </div>
           <div className="admin-list">

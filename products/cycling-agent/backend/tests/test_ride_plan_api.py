@@ -155,6 +155,11 @@ def test_post_ride_plan_returns_recommendation_payload() -> None:
     assert body["parsed_constraints"]["slope_tolerance"] == "avoid"
     assert body["recommended_plan"]["route_code"].startswith("DYN-HANGZHOU-")
     assert body["alternatives"] == []
+    assert body["decision"]["intent"] == "ride_plan"
+    assert body["plan"]["kind"] == "route"
+    assert body["plan"]["code"] == body["recommended_plan"]["route_code"]
+    assert body["equipment"]["items"]
+    assert body["fallback"]["status"] in {"stable", "degraded"}
     assert body["decision_summary"]["go_decision"] in {"go", "caution", "no_go"}
     assert body["decision_summary"]["decision_title"]
     assert body["decision_summary"]["equipment_advice"]
@@ -201,6 +206,31 @@ def test_preflight_returns_missing_core_fields_without_planning() -> None:
     assert body["clarification_prompt"] is not None
 
 
+def test_preflight_accepts_intent_only_weekend_payload_and_maps_execution_fields() -> None:
+    client = TestClient(create_app(weather_provider=StubWeatherProvider()))
+    response = client.post(
+        "/api/v1/ride/plan/preflight",
+        json={
+            "query": "周末推荐一下",
+            "target_date": "2026-05-30",
+            "intent": "weekend_recommendation",
+            "input_mode": "structured",
+            "structured_constraints": {
+                "start_point": "闻涛路滨江段",
+                "duration_bucket": "two_day",
+                "overnight_preference": "required",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ready_to_plan"] is True
+    assert body["parsed_constraints"]["intent"] == "weekend_recommendation"
+    assert body["parsed_constraints"]["planning_mode"] == "nearby_trip"
+    assert body["parsed_constraints"]["planning_scene"] == "weekend_trip"
+
+
 def test_post_ride_plan_rejects_missing_core_fields_before_planning() -> None:
     client = TestClient(create_app(weather_provider=StubWeatherProvider()))
     response = client.post(
@@ -242,9 +272,11 @@ def test_post_ride_plan_accepts_structured_constraints_and_returns_dynamic_input
 
     assert response.status_code == 200
     body = response.json()
+    assert body["intent"] == "ride_plan"
     assert body["parsed_constraints"]["origin_region"] == "滨江"
     assert body["parsed_constraints"]["start_point"] == "闻涛路滨江段"
     assert body["input_summary"] == {
+        "intent": "ride_plan",
         "input_mode": "structured",
         "target_date": "2026-05-30",
         "departure_time": "07:00",

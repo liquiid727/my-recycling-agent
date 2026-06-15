@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import date
 from typing import Any
 
-from app.agents.query_parser_agent import parse_query_fallback
+from app.agents.query_parser_agent import parse_query_fallback, resolve_planning_context
 
 
 ASSISTANT_NAME = "AAA骑车帮帮"
@@ -18,29 +18,44 @@ LLM_CHAT_TIMEOUT_SECONDS = 8.0
 def build_chat_turn(
     *,
     messages: list[dict],
-    planning_scene: str,
+    intent: str | None = None,
+    planning_scene: str | None = None,
     target_date: date,
     slot_state: dict | None = None,
     user_profile: dict | None = None,
     llm_provider: Any = None,
 ) -> dict:
+    user_text = _collect_user_text(messages)
+    planning_context = resolve_planning_context(
+        intent=intent,
+        planning_scene=planning_scene,
+        query=user_text,
+        parsed_constraints=slot_state or {},
+    )
     current_slots = dict(slot_state or {})
-    current_slots["planning_scene"] = planning_scene
+    current_slots["planning_scene"] = planning_context["planning_scene"]
 
     llm_payload = _try_llm_chat_turn(
         llm_provider=llm_provider,
         messages=messages,
         slot_state=current_slots,
-        planning_scene=planning_scene,
+        planning_scene=planning_context["planning_scene"],
         target_date=target_date,
         user_profile=user_profile,
     )
     if llm_payload is not None:
-        return _normalize_chat_turn(llm_payload, current_slots=current_slots, target_date=target_date)
+        return _normalize_chat_turn(
+            llm_payload,
+            current_slots=current_slots,
+            target_date=target_date,
+            user_text=user_text,
+            requested_intent=intent,
+        )
 
     return _build_fallback_chat_turn(
         messages=messages,
-        planning_scene=planning_scene,
+        intent=intent,
+        planning_scene=planning_context["planning_scene"],
         target_date=target_date,
         slot_state=current_slots,
     )
@@ -79,8 +94,16 @@ def _try_llm_chat_turn(
     return payload if isinstance(payload, dict) else None
 
 
-def _normalize_chat_turn(payload: dict, *, current_slots: dict, target_date: date) -> dict:
+def _normalize_chat_turn(payload: dict, *, current_slots: dict, target_date: date, user_text: str, requested_intent: str | None) -> dict:
     merged_slots = _merge_slots(current_slots, payload.get("slot_state") if isinstance(payload.get("slot_state"), dict) else {})
+    planning_context = resolve_planning_context(
+        intent=payload.get("intent") or requested_intent,
+        planning_scene=payload.get("planning_scene") or merged_slots.get("planning_scene"),
+        planning_mode=payload.get("planning_mode"),
+        query=user_text,
+        parsed_constraints=merged_slots,
+    )
+    merged_slots["planning_scene"] = planning_context["planning_scene"]
     missing_slots = _missing_slots(merged_slots)
     ready_to_plan = not missing_slots
     assistant_message = str(payload.get("assistant_message") or _build_assistant_message(merged_slots, missing_slots, ready_to_plan))
@@ -88,29 +111,44 @@ def _normalize_chat_turn(payload: dict, *, current_slots: dict, target_date: dat
         assistant_message = _build_assistant_message(merged_slots, missing_slots, ready_to_plan)
     return {
         "assistant_name": ASSISTANT_NAME,
+        "intent": planning_context["intent"],
         "assistant_message": _strip_engineering_language(assistant_message),
         "slot_state": merged_slots,
         "missing_slots": missing_slots,
         "ready_to_plan": ready_to_plan,
-        "planner_request": _build_planner_request(merged_slots, target_date) if ready_to_plan else None,
+        "planner_request": _build_planner_request(planning_context["intent"], merged_slots, target_date) if ready_to_plan else None,
         "ui_hints": _build_ui_hints(missing_slots, ready_to_plan),
     }
 
 
-def _build_fallback_chat_turn(*, messages: list[dict], planning_scene: str, target_date: date, slot_state: dict) -> dict:
-    user_text = "；".join(message.get("content", "") for message in messages if message.get("role") == "user")
+def _build_fallback_chat_turn(
+    *,
+    messages: list[dict],
+    intent: str | None,
+    planning_scene: str,
+    target_date: date,
+    slot_state: dict,
+) -> dict:
+    user_text = _collect_user_text(messages)
     parsed = parse_query_fallback(user_text)
-    parsed["planning_scene"] = planning_scene
     merged_slots = _merge_slots(slot_state, parsed)
+    planning_context = resolve_planning_context(
+        intent=intent,
+        planning_scene=planning_scene,
+        query=user_text,
+        parsed_constraints=merged_slots,
+    )
+    merged_slots["planning_scene"] = planning_context["planning_scene"]
     missing_slots = _missing_slots(merged_slots)
     ready_to_plan = not missing_slots
     return {
         "assistant_name": ASSISTANT_NAME,
+        "intent": planning_context["intent"],
         "assistant_message": _build_assistant_message(merged_slots, missing_slots, ready_to_plan),
         "slot_state": merged_slots,
         "missing_slots": missing_slots,
         "ready_to_plan": ready_to_plan,
-        "planner_request": _build_planner_request(merged_slots, target_date) if ready_to_plan else None,
+        "planner_request": _build_planner_request(planning_context["intent"], merged_slots, target_date) if ready_to_plan else None,
         "ui_hints": _build_ui_hints(missing_slots, ready_to_plan),
     }
 
@@ -169,7 +207,7 @@ def _missing_slots(slots: dict) -> list[str]:
             missing.append("start_point")
         if not slots.get("duration_bucket"):
             missing.append("duration_bucket")
-        if not slots.get("overnight_preference"):
+        if slots.get("duration_bucket") in {"two_day", "three_day"} and not slots.get("overnight_preference"):
             missing.append("overnight_preference")
         return missing
 
@@ -204,7 +242,7 @@ def _build_assistant_message(slots: dict, missing_slots: list[str], ready_to_pla
     return "可以，我还需要再确认一个小信息，补上后就能给你方案。"
 
 
-def _build_planner_request(slots: dict, target_date: date) -> dict:
+def _build_planner_request(intent: str, slots: dict, target_date: date) -> dict:
     planning_scene = slots.get("planning_scene") or "city_ride"
     planning_mode = "nearby_trip" if planning_scene == "weekend_trip" else "route"
     structured_constraints = {
@@ -222,6 +260,7 @@ def _build_planner_request(slots: dict, target_date: date) -> dict:
         "cross_city_allowed": slots.get("cross_city_allowed"),
     }
     return {
+        "intent": intent,
         "query": f"AAA骑车帮帮结构化规划：{slots.get('start_point', '杭州')}出发",
         "target_date": target_date.isoformat(),
         "planning_mode": planning_mode,
@@ -255,6 +294,10 @@ def _format_hours(value: object) -> str:
     if isinstance(value, (int, float)):
         return f"{value:g} 小时"
     return "一段时间"
+
+
+def _collect_user_text(messages: list[dict]) -> str:
+    return "；".join(message.get("content", "") for message in messages if message.get("role") == "user")
 
 
 def _strip_engineering_language(message: str) -> str:

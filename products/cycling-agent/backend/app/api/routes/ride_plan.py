@@ -25,6 +25,7 @@ from app.agents.query_parser_agent import (
     enrich_parsed_constraints,
     missing_core_fields,
     parse_query_fallback,
+    resolve_planning_context,
 )
 from app.schemas.ride_plan import RidePlanPreflightResponseSchema, RidePlanRequestSchema, RidePlanResponseSchema
 from app.services.ride_planning_orchestrator import build_demo_plan
@@ -174,9 +175,15 @@ def _parse_payload_constraints(payload: RidePlanRequestSchema) -> dict:
         )
     else:
         parsed = enrich_parsed_constraints(parse_query_fallback(payload.query), user_profile)
-    parsed["planning_mode"] = payload.planning_mode
-    if payload.planning_scene:
-        parsed["planning_scene"] = payload.planning_scene
+    parsed.update(
+        resolve_planning_context(
+            intent=payload.intent,
+            planning_mode=payload.planning_mode,
+            planning_scene=payload.planning_scene,
+            query=payload.query,
+            parsed_constraints=parsed,
+        )
+    )
     return parsed
 
 

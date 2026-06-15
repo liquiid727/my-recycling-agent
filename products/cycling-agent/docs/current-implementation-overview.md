@@ -11,7 +11,11 @@ Traceability:
 
 ## 1. 当前定位
 
-当前项目已经从设计文档推进到可运行的 MVP 工程。产品口径按 `planning_scene` 识别真实场景，工程仍保留 `planning_mode` 兼容路径：
+当前项目已经从设计文档推进到可运行的 MVP 工程。package 1 现在以 `intent` 作为用户面主语义，工程仍保留 `planning_scene` / `planning_mode` 兼容路径：
+
+- `intent=ride_today`：先判断今天 / 今晚值不值得骑，再决定是否进入方案生成。
+- `intent=ride_plan`：用户已经决定要骑，重点是出发点、时长、风格和稳妥路线。
+- `intent=weekend_recommendation`：周末 / 节假日骑行出行，重点是目的地方向、天数、住宿和返程。
 
 - `planning_scene=city_ride`：今晚 / 下午市区即时骑行，工程路径仍使用 `planning_mode=route`。
 - `planning_scene=weekend_trip`：周末 / 节假日 2 到 3 天附近骑行出行，工程路径仍使用扩展后的 `planning_mode=nearby_trip`。
@@ -144,9 +148,11 @@ mvp2 额外包含：
 
 已经落地：
 
+- intent-first 语义层：`ride_today` / `ride_plan` / `weekend_recommendation` 成为首页、聊天和规划请求的主口径，同时保留旧执行字段兼容。
 - 自然语言需求解析：出发点、可骑时长、目标距离、骑行风格、体能、坡度容忍、`planning_scene`、周末天数、过夜偏好。
-- 澄清提示：当缺少准确出发点、时间预算、周末天数或过夜偏好时，先提示补充信息。
+- 澄清提示：当缺少准确出发点、时间预算、周末天数时先追问；只有两天及以上周末方案才强制追问过夜偏好。
 - 决策优先输出：响应新增 `decision_summary`，先给建议去 / 谨慎 / 不建议、原因、可信依据和装备建议。
+- 统一结果结构：响应新增 `decision`、`plan`、`alternative_plans`、`explanation`、`risk`、`equipment`、`fallback`，前端可按新结构渲染，同时保留旧字段兼容。
 - 模板路线推荐：基于杭州路线库做匹配和排序。
 - 天气事实：Open-Meteo 正常返回时使用真实快照，失败时返回 fallback snapshot。
 - 路线/POI provider trace：默认本地增强，可切高德模式。
@@ -166,11 +172,11 @@ mvp2 额外包含：
 
 页面：
 
-- `/`: `HomePage.tsx`，输入需求、切换“今晚 / 下午骑一下”和“周末骑行出行”场景、展示阶段反馈、澄清提示和即时规划结果。
+- `/`: `HomePage.tsx`，输入需求、切换“今天适合骑吗 / 帮我安排一次骑行 / 周末去哪骑”三种 intent、展示阶段反馈、澄清提示和即时规划结果。
 - `/plans/:requestNo`: `PlanResultPage.tsx`，读取后端保存的规划结果。
 - `/routes/:routeCode`: `RouteDetailPage.tsx`，查看路线模板详情。
 - `/settings`: `SettingsPage.tsx`，编辑体能、坡度容忍、骑行风格，并同步到后端。
-- `/admin`: `AdminPage.tsx`，维护路线模板、周边目的地、周边游方案模板、城市策略、风险规则，查看查询日志。
+- `/admin`: `AdminPage.tsx`，按决策规则、路线资产、周末资产、陪伴话术四个桶维护后台资产，并查看查询日志。
 
 主要前端模块：
 

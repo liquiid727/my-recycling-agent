@@ -15,6 +15,7 @@ export type RoutePlanCard = {
 };
 
 export type InputMode = "natural" | "structured";
+export type RideIntent = "ride_today" | "ride_plan" | "weekend_recommendation";
 export type PlanningMode = "route" | "nearby_trip";
 export type PlanningScene = "city_ride" | "weekend_trip";
 
@@ -45,9 +46,10 @@ export type StructuredConstraints = {
 };
 
 export type PlannerRequest = {
+  intent?: RideIntent;
   query: string;
   target_date: string;
-  planning_mode: PlanningMode;
+  planning_mode?: PlanningMode;
   planning_scene?: PlanningScene;
   input_mode: InputMode;
   structured_constraints?: StructuredConstraints;
@@ -67,13 +69,15 @@ export type ChatTurnMessage = {
 
 export type ChatTurnRequest = {
   messages: ChatTurnMessage[];
-  planning_scene: PlanningScene;
+  intent?: RideIntent;
+  planning_scene?: PlanningScene;
   target_date: string;
   slot_state?: Record<string, unknown>;
 };
 
 export type ChatTurnResponse = {
   assistant_name: string;
+  intent: RideIntent;
   assistant_message: string;
   slot_state: Record<string, unknown>;
   missing_slots: string[];
@@ -87,6 +91,7 @@ export type ChatTurnResponse = {
 };
 
 export type InputSummary = {
+  intent?: RideIntent;
   planning_mode?: PlanningMode;
   planning_scene?: PlanningScene;
   input_mode: InputMode;
@@ -251,6 +256,7 @@ export type RecommendedRoute = {
 
 export type RidePlanResponse = {
   status: string;
+  intent?: RideIntent;
   planning_mode?: PlanningMode;
   request_no: string;
   parsed_constraints: Record<string, unknown>;
@@ -269,6 +275,60 @@ export type RidePlanResponse = {
     summary: string;
     fallback_reason: string | null;
   }>;
+  decision?: {
+    intent: RideIntent;
+    scene?: PlanningScene | null;
+    go_decision: string;
+    title: string;
+    summary: string;
+  } | null;
+  plan?: {
+    kind: "route" | "weekend_recommendation";
+    code: string;
+    title: string;
+    summary: string;
+    distance_km?: number | null;
+    elevation_gain_m?: number | null;
+    estimated_duration_hours?: number | null;
+    total_duration_hours?: number | null;
+    risk_level?: string | null;
+    destination_name?: string | null;
+    stay_suggestion?: string | null;
+    return_options?: string[];
+  } | null;
+  alternative_plans?: Array<{
+    kind: "route" | "weekend_recommendation";
+    code: string;
+    title: string;
+    summary: string;
+    distance_km?: number | null;
+    elevation_gain_m?: number | null;
+    estimated_duration_hours?: number | null;
+    total_duration_hours?: number | null;
+    risk_level?: string | null;
+    destination_name?: string | null;
+    stay_suggestion?: string | null;
+    return_options?: string[];
+  }>;
+  explanation?: {
+    headline: string;
+    summary: string;
+    confidence_notes: string[];
+  } | null;
+  risk?: {
+    level?: string | null;
+    items: string[];
+    fallback_plan?: string | null;
+    scores?: Record<string, unknown> | null;
+  } | null;
+  equipment?: {
+    items: string[];
+  } | null;
+  fallback?: {
+    status: string;
+    reasons: string[];
+    message?: string | null;
+  } | null;
   decision_summary?: DecisionSummary | null;
   roadbook: Roadbook | null;
   recommended_trip?: NearbyTripCard | null;
@@ -348,6 +408,7 @@ export async function preflightRidePlan(request: PlannerRequest, userProfile?: U
 export async function createChatTurn(request: ChatTurnRequest, userProfile?: UserProfile): Promise<ChatTurnResponse> {
   const requestBody: Record<string, unknown> = {
     messages: request.messages,
+    intent: request.intent,
     planning_scene: request.planning_scene,
     target_date: request.target_date,
     slot_state: request.slot_state ?? {}
@@ -489,12 +550,17 @@ export async function getRidePlan(requestNo: string): Promise<RidePlanResponse> 
 
 function buildRidePlanRequest(request: PlannerRequest, userProfile?: UserProfile): Record<string, unknown> {
   const requestBody: Record<string, unknown> = {
+    intent: request.intent,
     query: request.query,
     target_date: request.target_date,
-    planning_mode: request.planning_mode,
-    planning_scene: request.planning_scene,
     input_mode: request.input_mode
   };
+  if (request.planning_mode) {
+    requestBody.planning_mode = request.planning_mode;
+  }
+  if (request.planning_scene) {
+    requestBody.planning_scene = request.planning_scene;
+  }
   if (request.structured_constraints) {
     requestBody.structured_constraints = request.structured_constraints;
   }

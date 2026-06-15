@@ -61,3 +61,21 @@ def test_ride_plan_request_accepts_city_ride_evening_duration() -> None:
     assert payload.planning_scene == "city_ride"
     assert payload.structured_constraints is not None
     assert payload.structured_constraints.duration_bucket == "evening"
+
+
+def test_ride_plan_request_accepts_intent_only_weekend_shape() -> None:
+    payload = RidePlanRequestSchema(
+        query="周末推荐一下",
+        target_date=date(2026, 6, 6),
+        intent="weekend_recommendation",
+        input_mode="structured",
+        structured_constraints={
+            "start_point": "闻涛路滨江段",
+            "duration_bucket": "two_day",
+            "overnight_preference": "required",
+        },
+    )
+
+    assert payload.intent == "weekend_recommendation"
+    assert payload.planning_mode is None
+    assert payload.planning_scene is None

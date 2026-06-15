@@ -9,6 +9,8 @@ import re
 
 REGION_KEYWORDS = ("滨江", "西湖", "龙井", "湘湖", "余杭", "萧山")
 WEEKEND_DESTINATION_KEYWORDS = ("千岛湖", "湖州", "莫干山", "安吉")
+RIDE_TODAY_DECISION_KEYWORDS = ("适合", "能不能", "可不可以", "值不值得", "要不要", "去不去")
+RIDE_TODAY_TIME_KEYWORDS = ("今天", "今晚", "下午", "下班", "现在")
 
 
 def parse_query_fallback(query: str) -> dict:
@@ -31,7 +33,7 @@ def parse_query_fallback(query: str) -> dict:
     if planning_scene == "weekend_trip":
         if duration_bucket is None:
             missing_fields.append("duration_bucket")
-        if overnight_preference is None:
+        if _requires_overnight_preference(duration_bucket) and overnight_preference is None:
             missing_fields.append("overnight_preference")
     elif available_hours is None and distance_match is None:
         missing_fields.append("available_hours_or_target_distance_km")
@@ -40,7 +42,7 @@ def parse_query_fallback(query: str) -> dict:
     if missing_fields:
         confidence = 0.68 if len(missing_fields) == 1 else 0.52
 
-    return {
+    parsed = {
         "planning_scene": planning_scene,
         "origin_region": origin_region,
         "start_point": start_point,
@@ -57,6 +59,8 @@ def parse_query_fallback(query: str) -> dict:
         "missing_fields": missing_fields,
         "confidence": confidence,
     }
+    parsed["intent"] = resolve_intent(query=query, planning_scene=planning_scene, parsed_constraints=parsed)
+    return parsed
 
 
 def enrich_parsed_constraints(parsed_constraints: dict, user_profile: dict | None = None) -> dict:
@@ -130,6 +134,70 @@ def missing_core_fields(parsed_constraints: dict, *, target_date: object | None)
         missing.append("target_date")
     missing.extend(_missing_core_fields(parsed_constraints))
     return missing
+
+
+def resolve_planning_context(
+    *,
+    intent: str | None = None,
+    planning_mode: str | None = None,
+    planning_scene: str | None = None,
+    query: str | None = None,
+    parsed_constraints: dict | None = None,
+) -> dict:
+    parsed = parsed_constraints or {}
+    weekend_requested = any(
+        value == "weekend_trip"
+        for value in (
+            planning_scene,
+            parsed.get("planning_scene"),
+        )
+    ) or any(value == "nearby_trip" for value in (planning_mode, parsed.get("planning_mode"))) or intent == "weekend_recommendation"
+
+    resolved_intent = "weekend_recommendation" if weekend_requested else resolve_intent(
+        intent=intent,
+        planning_mode=planning_mode,
+        planning_scene=planning_scene,
+        query=query,
+        parsed_constraints=parsed,
+    )
+    if resolved_intent == "weekend_recommendation":
+        return {
+            "intent": "weekend_recommendation",
+            "planning_mode": "nearby_trip",
+            "planning_scene": "weekend_trip",
+        }
+    return {
+        "intent": resolved_intent,
+        "planning_mode": "route",
+        "planning_scene": "city_ride",
+    }
+
+
+def resolve_intent(
+    *,
+    intent: str | None = None,
+    planning_mode: str | None = None,
+    planning_scene: str | None = None,
+    query: str | None = None,
+    parsed_constraints: dict | None = None,
+) -> str:
+    if intent in {"ride_today", "ride_plan", "weekend_recommendation"}:
+        return intent
+    if planning_scene == "weekend_trip" or planning_mode == "nearby_trip":
+        return "weekend_recommendation"
+
+    parsed = parsed_constraints or {}
+    if parsed.get("planning_scene") == "weekend_trip":
+        return "weekend_recommendation"
+    if _has_ready_city_ride_constraints(parsed):
+        return "ride_plan"
+
+    text = query or ""
+    if any(keyword in text for keyword in RIDE_TODAY_DECISION_KEYWORDS):
+        return "ride_today"
+    if any(keyword in text for keyword in RIDE_TODAY_TIME_KEYWORDS) and not _has_ready_city_ride_constraints(parsed):
+        return "ride_today"
+    return "ride_plan"
 
 
 def _parse_destination_preferences(query: str) -> list[str]:
@@ -247,11 +315,21 @@ def _missing_core_fields(parsed_constraints: dict) -> list[str]:
     if parsed_constraints.get("planning_scene") == "weekend_trip":
         if not parsed_constraints.get("duration_bucket"):
             missing.append("duration_bucket")
-        if not parsed_constraints.get("overnight_preference"):
+        if _requires_overnight_preference(parsed_constraints.get("duration_bucket")) and not parsed_constraints.get("overnight_preference"):
             missing.append("overnight_preference")
     elif not (parsed_constraints.get("available_hours") or parsed_constraints.get("target_distance_km")):
         missing.append("available_hours_or_target_distance_km")
     return missing
+
+
+def _has_ready_city_ride_constraints(parsed_constraints: dict) -> bool:
+    if not parsed_constraints.get("start_point"):
+        return False
+    return bool(parsed_constraints.get("available_hours") or parsed_constraints.get("target_distance_km"))
+
+
+def _requires_overnight_preference(duration_bucket: str | None) -> bool:
+    return duration_bucket in {"two_day", "three_day"}
 
 
 def build_clarification_prompt(parsed_constraints: dict) -> str | None:

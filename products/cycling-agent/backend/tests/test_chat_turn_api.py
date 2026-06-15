@@ -114,6 +114,7 @@ def test_chat_turn_asks_warm_follow_up_for_vague_city_ride() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["assistant_name"] == "AAA骑车帮帮"
+    assert body["intent"] == "ride_today"
     assert body["ready_to_plan"] is False
     assert body["missing_slots"] == ["start_point", "available_hours_or_target_distance_km"]
     assert "你现在从哪里出发" in body["assistant_message"]
@@ -142,13 +143,37 @@ def test_chat_turn_second_reply_returns_planner_request() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    assert body["intent"] == "ride_plan"
     assert body["ready_to_plan"] is True
     assert body["slot_state"]["start_point"] == "沈塘桥"
     assert body["slot_state"]["available_hours"] == 2
     assert body["planner_request"]["input_mode"] == "structured"
+    assert body["planner_request"]["intent"] == "ride_plan"
     assert body["planner_request"]["structured_constraints"]["start_point"] == "沈塘桥"
     assert body["planner_request"]["structured_constraints"]["available_hours"] == 2
     assert "missing_fields" not in body["assistant_message"]
+
+
+def test_chat_turn_accepts_intent_only_weekend_request() -> None:
+    app = create_app()
+    app.state.llm_provider = BrokenChatLLMProvider()
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/ride/chat/turn",
+        json={
+            "messages": [{"role": "user", "content": "周末推荐一下，我想出去骑两天"}],
+            "intent": "weekend_recommendation",
+            "target_date": "2026-06-06",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "weekend_recommendation"
+    assert body["slot_state"]["planning_scene"] == "weekend_trip"
+    assert "duration_bucket" not in body["missing_slots"]
+    assert "start_point" in body["missing_slots"]
 
 
 def test_chat_turn_falls_back_when_llm_fails() -> None:

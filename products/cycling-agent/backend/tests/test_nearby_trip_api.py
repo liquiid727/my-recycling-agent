@@ -53,7 +53,13 @@ def test_nearby_trip_plan_returns_primary_trip_alternatives_rhythm_and_return_op
 
     assert response.status_code == 200
     body = response.json()
+    assert body["intent"] == "weekend_recommendation"
     assert body["planning_mode"] == "nearby_trip"
+    assert body["decision"]["intent"] == "weekend_recommendation"
+    assert body["plan"]["kind"] == "weekend_recommendation"
+    assert body["plan"]["code"] == body["recommended_trip"]["trip_no"]
+    assert body["risk"]["items"]
+    assert body["fallback"]["message"]
     assert body["recommended_trip"]["trip_no"].startswith("TRIP-")
     assert body["recommended_trip"]["destination_name"]
     assert body["recommended_trip"]["total_duration_hours"] <= 5
@@ -118,6 +124,8 @@ def test_weekend_trip_plan_returns_lodging_equipment_and_weather_window(tmp_path
     assert response.status_code == 200
     body = response.json()
     assert body["parsed_constraints"]["planning_scene"] == "weekend_trip"
+    assert body["decision"]["scene"] == "weekend_trip"
+    assert body["plan"]["destination_name"] == "千岛湖周边骑行停留区"
     assert body["recommended_trip"]["destination_name"] == "千岛湖周边骑行停留区"
     assert body["recommended_trip"]["duration_bucket"] == "two_day"
     assert body["recommended_trip"]["itinerary_days"]

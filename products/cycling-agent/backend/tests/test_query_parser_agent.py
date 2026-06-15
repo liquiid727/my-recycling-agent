@@ -38,6 +38,7 @@ def test_parse_query_extracts_distance_and_enriches_profile_fields() -> None:
 def test_parse_query_detects_vague_evening_city_ride() -> None:
     parsed = parse_query_fallback("我今天晚上想出去骑行一下")
 
+    assert parsed["intent"] == "ride_today"
     assert parsed["planning_scene"] == "city_ride"
     assert parsed["duration_bucket"] == "evening"
     assert parsed["missing_fields"] == ["start_point", "available_hours_or_target_distance_km"]
@@ -46,24 +47,26 @@ def test_parse_query_detects_vague_evening_city_ride() -> None:
 def test_parse_query_detects_weekend_trip_and_destination_duration() -> None:
     parsed = parse_query_fallback("这周末想去千岛湖骑两天")
 
+    assert parsed["intent"] == "weekend_recommendation"
     assert parsed["planning_scene"] == "weekend_trip"
     assert parsed["duration_bucket"] == "two_day"
     assert "千岛湖" in parsed["destination_preferences"]
     assert "overnight_preference" not in parsed["missing_fields"]
 
 
-def test_parse_query_detects_weekend_trip_missing_overnight_preference() -> None:
+def test_parse_query_detects_weekend_trip_without_asking_overnight_too_early() -> None:
     parsed = parse_query_fallback("周末想出去骑车，附近有什么推荐线路么")
 
     assert parsed["planning_scene"] == "weekend_trip"
     assert "start_point" in parsed["missing_fields"]
     assert "duration_bucket" in parsed["missing_fields"]
-    assert "overnight_preference" in parsed["missing_fields"]
+    assert "overnight_preference" not in parsed["missing_fields"]
 
 
 def test_parse_query_detects_evening_start_point_and_slope_preference() -> None:
     parsed = parse_query_fallback("今晚从闻涛路滨江段出发骑2小时，不要爬坡")
 
+    assert parsed["intent"] == "ride_plan"
     assert parsed["planning_scene"] == "city_ride"
     assert parsed["duration_bucket"] == "evening"
     assert parsed["start_point"] == "闻涛路滨江段"

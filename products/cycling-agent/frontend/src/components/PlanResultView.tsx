@@ -20,13 +20,24 @@ type Props = {
 };
 
 export default function PlanResultView({ result }: Props) {
+  const decisionSummary = result.decision_summary ?? (result.decision && result.explanation ? {
+    scene: result.decision.scene ?? null,
+    go_decision: result.decision.go_decision,
+    decision_title: result.decision.title,
+    decision_reason: result.explanation.summary,
+    confidence_notes: result.explanation.confidence_notes,
+    equipment_advice: result.equipment?.items ?? []
+  } : null);
+  const normalizedPlan = result.plan;
+  const fallbackState = result.fallback;
+
   if (result.status === "no_match") {
     const showPopularFallback = shouldShowPopularRouteFallback(result);
     return (
       <div className="success-layout">
         <article className="detail-panel state-error">
           <h3>当前没有合适路线</h3>
-          <p>{result.no_match_reason ?? "请调整时长、出发区域或骑行偏好后重试。"}</p>
+          <p>{fallbackState?.message ?? result.no_match_reason ?? "请调整时长、出发区域或骑行偏好后重试。"}</p>
           {result.clarification_prompt ? <p>{result.clarification_prompt}</p> : null}
         </article>
         {showPopularFallback ? <PopularRouteFallback result={result} /> : null}
@@ -35,23 +46,32 @@ export default function PlanResultView({ result }: Props) {
   }
 
   const recommendation = {
-    routeName: result.recommended_plan.route_name,
-    distanceKm: result.recommended_plan.distance_km,
-    elevationGainM: result.recommended_plan.elevation_gain_m,
-    estimatedDurationHours: result.recommended_plan.estimated_duration_hours,
-    riskLevel: result.recommended_plan.risk_level,
-    summaryReason: result.recommended_plan.summary_reason
+    routeName: normalizedPlan?.title ?? result.recommended_plan.route_name,
+    distanceKm: normalizedPlan?.distance_km ?? result.recommended_plan.distance_km,
+    elevationGainM: normalizedPlan?.elevation_gain_m ?? result.recommended_plan.elevation_gain_m,
+    estimatedDurationHours: normalizedPlan?.estimated_duration_hours ?? result.recommended_plan.estimated_duration_hours,
+    riskLevel: normalizedPlan?.risk_level ?? result.recommended_plan.risk_level,
+    summaryReason: normalizedPlan?.summary ?? result.recommended_plan.summary_reason
   };
 
   const alternatives =
-    result.alternatives.map((plan) => ({
-      routeName: plan.route_name,
-      distanceKm: plan.distance_km,
-      elevationGainM: plan.elevation_gain_m,
-      estimatedDurationHours: plan.estimated_duration_hours,
-      riskLevel: plan.risk_level,
-      summaryReason: plan.summary_reason
-    })) ?? [];
+    (result.alternative_plans?.length
+      ? result.alternative_plans.filter((plan) => plan.kind === "route").map((plan) => ({
+          routeName: plan.title,
+          distanceKm: plan.distance_km ?? 0,
+          elevationGainM: plan.elevation_gain_m ?? 0,
+          estimatedDurationHours: plan.estimated_duration_hours ?? 0,
+          riskLevel: plan.risk_level ?? "unknown",
+          summaryReason: plan.summary
+        }))
+      : result.alternatives.map((plan) => ({
+          routeName: plan.route_name,
+          distanceKm: plan.distance_km,
+          elevationGainM: plan.elevation_gain_m,
+          estimatedDurationHours: plan.estimated_duration_hours,
+          riskLevel: plan.risk_level,
+          summaryReason: plan.summary_reason
+        }))) ?? [];
 
   const roadbook = result.roadbook
     ? {
@@ -82,18 +102,18 @@ export default function PlanResultView({ result }: Props) {
   const fallbackReason = result.fallback_reason ?? [];
   const toolTrace = result.tool_trace ?? [];
 
-  if (result.planning_mode === "nearby_trip" && result.recommended_trip) {
+  if ((normalizedPlan?.kind === "weekend_recommendation" || result.planning_mode === "nearby_trip") && result.recommended_trip) {
     return (
       <div className="success-layout">
-        {result.decision_summary ? <DecisionSummaryPanel summary={result.decision_summary} /> : null}
+        {decisionSummary ? <DecisionSummaryPanel summary={decisionSummary} /> : null}
         {result.input_summary ? <InputSummaryCard summary={result.input_summary} /> : null}
         {weatherSnapshot ? <WeatherStatusCard snapshot={weatherSnapshot} fallbackReason={fallbackReason} /> : null}
         <article className="detail-panel detail-panel-primary">
           <div className="section-heading">
             <p className="section-kicker">Weekend Trip</p>
-            <h2>{result.recommended_trip.trip_name}</h2>
+            <h2>{normalizedPlan?.title ?? result.recommended_trip.trip_name}</h2>
           </div>
-          <p className="summary-copy">{result.recommended_trip.why_recommended}</p>
+          <p className="summary-copy">{normalizedPlan?.summary ?? result.recommended_trip.why_recommended}</p>
           <div className="metric-row">
             <span>{result.recommended_trip.destination_name}</span>
             <span>{result.recommended_trip.total_distance_km} km</span>
@@ -184,8 +204,8 @@ export default function PlanResultView({ result }: Props) {
   }
 
   return (
-    <div className="success-layout">
-      {result.decision_summary ? <DecisionSummaryPanel summary={result.decision_summary} /> : null}
+      <div className="success-layout">
+      {decisionSummary ? <DecisionSummaryPanel summary={decisionSummary} /> : null}
       {result.input_summary ? <InputSummaryCard summary={result.input_summary} /> : null}
       {clarificationPrompt ? (
         <article className="detail-panel state-error">

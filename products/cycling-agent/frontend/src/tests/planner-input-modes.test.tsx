@@ -54,6 +54,7 @@ test("natural chat asks warm follow-up when key ride slots are missing", async (
         ok: true,
         json: async () => ({
           assistant_name: "AAA骑车帮帮",
+          intent: "ride_today",
           assistant_message: "可以呀～今晚轻松骑挺合适。我先确认两件事：你现在从哪里出发？大概想骑多久？",
           slot_state: { planning_scene: "city_ride", duration_bucket: "evening" },
           missing_slots: ["start_point", "available_hours"],
@@ -97,6 +98,7 @@ test("natural follow-up replies stay in chat and ready turn submits planner requ
           ok: true,
           json: async () => ({
             assistant_name: "AAA骑车帮帮",
+            intent: "ride_today",
             assistant_message: "可以呀～今晚轻松骑挺合适。我先确认两件事：你现在从哪里出发？大概想骑多久？",
             slot_state: { planning_scene: "city_ride", duration_bucket: "evening" },
             missing_slots: ["start_point", "available_hours"],
@@ -110,6 +112,7 @@ test("natural follow-up replies stay in chat and ready turn submits planner requ
         ok: true,
         json: async () => ({
           assistant_name: "AAA骑车帮帮",
+          intent: "ride_plan",
           assistant_message: "收到，沈塘桥出发，骑 2 小时，轻松一点。我先帮你看今晚适不适合骑，再给你 2-3 条稳妥路线。",
           slot_state: {
             planning_scene: "city_ride",
@@ -120,6 +123,7 @@ test("natural follow-up replies stay in chat and ready turn submits planner requ
           missing_slots: [],
           ready_to_plan: true,
           planner_request: {
+            intent: "ride_plan",
             query: "我今天晚上想出去骑行一下；沈塘桥，我这里想要骑行2h",
             target_date: "2026-05-30",
             planning_mode: "route",
@@ -218,12 +222,14 @@ test("natural follow-up replies stay in chat and ready turn submits planner requ
     | [string, RequestInit]
     | undefined;
   const chatBody = JSON.parse(secondChatTurnCall?.[1].body as string);
+  expect(chatBody.intent).toBe("ride_today");
   expect(chatBody.messages.map((message: { content: string }) => message.content).join("；")).toContain("我今天晚上想出去骑行一下");
   expect(chatBody.messages.map((message: { content: string }) => message.content).join("；")).toContain("沈塘桥，我这里想要骑行2h");
   expect(chatBody.slot_state).toMatchObject({ planning_scene: "city_ride", duration_bucket: "evening" });
 
   const planCall = fetchMock.mock.calls.find(([url]) => url === "/api/v1/ride/plan") as [string, RequestInit] | undefined;
   const planBody = JSON.parse(planCall?.[1].body as string);
+  expect(planBody.intent).toBe("ride_plan");
   expect(planBody.input_mode).toBe("structured");
   expect(planBody.structured_constraints).toMatchObject({ start_point: "沈塘桥", available_hours: 2 });
 });
@@ -318,6 +324,7 @@ test("structured planner submits structured constraints in the request body", as
     | [string, RequestInit]
     | undefined;
   const body = JSON.parse(planCall?.[1].body as string);
+  expect(body.intent).toBe("ride_today");
   expect(body.input_mode).toBe("structured");
   expect(body.planning_scene).toBe("city_ride");
   expect(body.structured_constraints).toMatchObject({

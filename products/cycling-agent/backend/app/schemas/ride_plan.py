@@ -9,6 +9,9 @@ from datetime import date
 from pydantic import BaseModel, Field
 
 
+INTENT_PATTERN = "^(ride_today|ride_plan|weekend_recommendation)$"
+
+
 class UserProfilePayload(BaseModel):
     id: str | None = None
     uid: str | None = None
@@ -23,7 +26,8 @@ class RidePlanRequestSchema(BaseModel):
     query: str = Field(min_length=3)
     target_date: date
     city_code: str = "hangzhou"
-    planning_mode: str = Field(default="route", pattern="^(route|nearby_trip)$")
+    intent: str | None = Field(default=None, pattern=INTENT_PATTERN)
+    planning_mode: str | None = Field(default=None, pattern="^(route|nearby_trip)$")
     planning_scene: str | None = Field(default=None, pattern="^(city_ride|weekend_trip)$")
     input_mode: str = Field(default="natural", pattern="^(natural|structured)$")
     structured_constraints: "StructuredConstraintsPayload | None" = None
@@ -70,7 +74,8 @@ class ChatMessageSchema(BaseModel):
 
 class ChatTurnRequestSchema(BaseModel):
     messages: list[ChatMessageSchema] = Field(min_length=1)
-    planning_scene: str = Field(default="city_ride", pattern="^(city_ride|weekend_trip)$")
+    intent: str | None = Field(default=None, pattern=INTENT_PATTERN)
+    planning_scene: str | None = Field(default=None, pattern="^(city_ride|weekend_trip)$")
     target_date: date
     slot_state: dict = Field(default_factory=dict)
     user_profile: UserProfilePayload | None = None
@@ -78,6 +83,7 @@ class ChatTurnRequestSchema(BaseModel):
 
 class ChatTurnResponseSchema(BaseModel):
     assistant_name: str = "AAA骑车帮帮"
+    intent: str = Field(default="ride_plan", pattern=INTENT_PATTERN)
     assistant_message: str
     slot_state: dict = Field(default_factory=dict)
     missing_slots: list[str] = Field(default_factory=list)
@@ -162,8 +168,55 @@ class ToolTraceItemSchema(BaseModel):
     fallback_reason: str | None = None
 
 
+class NormalizedDecisionSchema(BaseModel):
+    intent: str = Field(pattern=INTENT_PATTERN)
+    scene: str | None = Field(default=None, pattern="^(city_ride|weekend_trip)$")
+    go_decision: str
+    title: str
+    summary: str
+
+
+class NormalizedPlanSchema(BaseModel):
+    kind: str = Field(pattern="^(route|weekend_recommendation)$")
+    code: str
+    title: str
+    summary: str
+    distance_km: float | None = None
+    elevation_gain_m: float | None = None
+    estimated_duration_hours: float | None = None
+    total_duration_hours: float | None = None
+    risk_level: str | None = None
+    destination_name: str | None = None
+    stay_suggestion: str | None = None
+    return_options: list[str] = Field(default_factory=list)
+
+
+class NormalizedExplanationSchema(BaseModel):
+    headline: str
+    summary: str
+    confidence_notes: list[str] = Field(default_factory=list)
+
+
+class NormalizedRiskSchema(BaseModel):
+    level: str | None = None
+    items: list[str] = Field(default_factory=list)
+    fallback_plan: str | None = None
+    scores: dict | None = None
+
+
+class NormalizedEquipmentSchema(BaseModel):
+    items: list[str] = Field(default_factory=list)
+
+
+class NormalizedFallbackSchema(BaseModel):
+    status: str
+    reasons: list[str] = Field(default_factory=list)
+    message: str | None = None
+
+
 class RidePlanResponseSchema(BaseModel):
     status: str = "success"
+    intent: str = Field(default="ride_plan", pattern=INTENT_PATTERN)
     planning_mode: str = "route"
     request_no: str
     parsed_constraints: dict
@@ -176,6 +229,13 @@ class RidePlanResponseSchema(BaseModel):
     weather_snapshot: WeatherSnapshotSchema
     fallback_reason: list[str] = Field(default_factory=list)
     tool_trace: list[ToolTraceItemSchema] = Field(default_factory=list)
+    decision: NormalizedDecisionSchema | None = None
+    plan: NormalizedPlanSchema | None = None
+    alternative_plans: list[NormalizedPlanSchema] = Field(default_factory=list)
+    explanation: NormalizedExplanationSchema | None = None
+    risk: NormalizedRiskSchema | None = None
+    equipment: NormalizedEquipmentSchema | None = None
+    fallback: NormalizedFallbackSchema | None = None
     decision_summary: DecisionSummarySchema | None = None
     roadbook: dict | None = None
     recommended_trip: NearbyTripCardSchema | None = None

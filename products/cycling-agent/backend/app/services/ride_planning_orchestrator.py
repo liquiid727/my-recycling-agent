@@ -15,6 +15,7 @@ from app.agents.query_parser_agent import (
     build_structured_constraints,
     enrich_parsed_constraints,
     parse_query_fallback,
+    resolve_planning_context,
 )
 from app.core.ids import generate_business_no
 from app.providers.weather_provider import build_fallback_weather_snapshot, normalize_region_code
@@ -88,6 +89,82 @@ def _format_constraint_warnings(warnings: list[str]) -> str | None:
     return "注意：" + "，".join(labels) + "，这是放宽硬约束后的最接近路线。"
 
 
+def _build_normalized_decision(intent: str, summary: dict) -> dict:
+    return {
+        "intent": intent,
+        "scene": summary.get("scene"),
+        "go_decision": summary.get("go_decision", "caution"),
+        "title": summary.get("decision_title", "先看结论"),
+        "summary": summary.get("decision_reason", ""),
+    }
+
+
+def _build_normalized_route_plan(card: dict) -> dict:
+    return {
+        "kind": "route",
+        "code": card["route_code"],
+        "title": card["route_name"],
+        "summary": card["summary_reason"],
+        "distance_km": card["distance_km"],
+        "elevation_gain_m": card["elevation_gain_m"],
+        "estimated_duration_hours": card["estimated_duration_hours"],
+        "risk_level": card["risk_level"],
+    }
+
+
+def _build_normalized_weekend_plan(card: dict) -> dict:
+    return {
+        "kind": "weekend_recommendation",
+        "code": card["trip_no"],
+        "title": card["trip_name"],
+        "summary": card["why_recommended"],
+        "distance_km": card["total_distance_km"],
+        "estimated_duration_hours": card["ride_duration_hours"],
+        "total_duration_hours": card["total_duration_hours"],
+        "risk_level": card["risk_level"],
+        "destination_name": card["destination_name"],
+        "stay_suggestion": card["stay_suggestion"],
+        "return_options": card.get("return_options", []),
+    }
+
+
+def _build_normalized_explanation(summary: dict, clarification_prompt: str | None = None) -> dict:
+    explanation = {
+        "headline": summary.get("decision_title", "先看结论"),
+        "summary": summary.get("decision_reason", ""),
+        "confidence_notes": summary.get("confidence_notes", []),
+    }
+    if clarification_prompt:
+        explanation["confidence_notes"] = [*explanation["confidence_notes"], clarification_prompt]
+    return explanation
+
+
+def _build_normalized_risk(*, risk_level: str | None, items: list[str], fallback_plan: str | None, scores: dict | None = None) -> dict:
+    return {
+        "level": risk_level,
+        "items": items,
+        "fallback_plan": fallback_plan,
+        "scores": scores,
+    }
+
+
+def _build_normalized_equipment(items: list[str]) -> dict:
+    return {"items": items}
+
+
+def _build_normalized_fallback(*, status: str, fallback_reason: list[str], message: str | None) -> dict:
+    fallback_status = "stable"
+    if status == "no_match":
+        fallback_status = "no_match"
+    elif fallback_reason:
+        fallback_status = "degraded"
+    return {
+        "status": fallback_status,
+        "reasons": fallback_reason,
+        "message": message,
+    }
+
+
 def build_demo_plan(
     payload: RidePlanRequestSchema,
     *,
@@ -107,10 +184,16 @@ def build_demo_plan(
     tool_trace: list[dict] = []
     constraints = _resolve_parsed_constraints(payload.query, user_profile, llm_provider, fallback_reason, tool_trace, stage_tracer)
     constraints = _merge_structured_constraints(payload, constraints, user_profile)
-    constraints["planning_mode"] = payload.planning_mode
-    constraints["planning_scene"] = payload.planning_scene or constraints.get("planning_scene") or (
-        "weekend_trip" if payload.planning_mode == "nearby_trip" else "city_ride"
+    planning_context = resolve_planning_context(
+        intent=payload.intent,
+        planning_mode=payload.planning_mode,
+        planning_scene=payload.planning_scene,
+        query=payload.query,
+        parsed_constraints=constraints,
     )
+    constraints.update(planning_context)
+    planning_mode = planning_context["planning_mode"]
+    intent = planning_context["intent"]
     clarification_prompt = build_clarification_prompt(constraints)
     region_code = normalize_region_code(constraints.get("origin_region"), payload.city_code)
     strategy_rules = strategy_rules or []
@@ -124,11 +207,12 @@ def build_demo_plan(
         tool_trace=tool_trace,
         stage_tracer=stage_tracer,
     )
-    if payload.planning_mode == "nearby_trip":
+    if planning_mode == "nearby_trip":
         return _build_nearby_trip_plan(
             payload=payload,
             request_no=request_no,
             constraints=constraints,
+            intent=intent,
             user_profile=user_profile,
             clarification_prompt=clarification_prompt,
             weather_snapshot=weather_snapshot,
@@ -236,11 +320,21 @@ def build_demo_plan(
         "risk_summary": recommended["risk"],
         "backup_plan": "如天气转差，优先缩短到江边往返或改为湘湖轻松线。",
     }
+    decision_summary = _build_decision_summary(
+        scene=constraints.get("planning_scene", "city_ride"),
+        primary_card=recommended["card"],
+        route=recommended["route"],
+        risk=recommended["risk"],
+        weather_snapshot=weather_snapshot,
+        constraints=constraints,
+        status="success",
+    )
 
     return {
         "request_no": request_no,
         "status": "success",
-        "planning_mode": "route",
+        "intent": intent,
+        "planning_mode": planning_mode,
         "parsed_constraints": constraints,
         "input_summary": _build_input_summary(payload, constraints),
         "clarification_prompt": clarification_prompt,
@@ -250,15 +344,23 @@ def build_demo_plan(
         "weather_snapshot": weather_snapshot,
         "fallback_reason": fallback_reason,
         "tool_trace": tool_trace,
-        "decision_summary": _build_decision_summary(
-            scene=constraints.get("planning_scene", "city_ride"),
-            primary_card=recommended["card"],
-            route=recommended["route"],
-            risk=recommended["risk"],
-            weather_snapshot=weather_snapshot,
-            constraints=constraints,
-            status="success",
+        "decision": _build_normalized_decision(intent, decision_summary),
+        "plan": _build_normalized_route_plan(recommended["card"]),
+        "alternative_plans": [_build_normalized_route_plan(item["card"]) for item in enriched_routes[1:4]],
+        "explanation": _build_normalized_explanation(decision_summary, clarification_prompt),
+        "risk": _build_normalized_risk(
+            risk_level=recommended["risk"].get("risk_level"),
+            items=recommended["risk"].get("risk_items", []),
+            fallback_plan=roadbook["backup_plan"],
+            scores=recommended["risk"],
         ),
+        "equipment": _build_normalized_equipment(decision_summary.get("equipment_advice", [])),
+        "fallback": _build_normalized_fallback(
+            status="success",
+            fallback_reason=fallback_reason,
+            message=roadbook["backup_plan"],
+        ),
+        "decision_summary": decision_summary,
         "route_map": _build_route_map(recommended["route"]),
         "roadbook": roadbook,
         "_audit": {
@@ -285,9 +387,24 @@ def _build_no_match_response(
     fallback_reason: list[str],
     tool_trace: list[dict],
 ) -> dict:
+    decision_summary = _build_decision_summary(
+        scene=constraints.get("planning_scene", "city_ride"),
+        primary_card={
+            "go_decision": "no_go",
+            "route_name": "当前没有合适路线",
+            "risk_level": "unknown",
+            "summary_reason": "动态路线暂时没有可用候选，未使用固定模板生成本次推荐。",
+        },
+        route={},
+        risk={"risk_level": "high"},
+        weather_snapshot=weather_snapshot,
+        constraints=constraints,
+        status="no_match",
+    )
     return {
         "status": "no_match",
-        "planning_mode": payload.planning_mode,
+        "intent": constraints.get("intent", "ride_plan"),
+        "planning_mode": constraints.get("planning_mode", "route"),
         "request_no": request_no,
         "parsed_constraints": constraints,
         "input_summary": _build_input_summary(payload, constraints),
@@ -307,20 +424,33 @@ def _build_no_match_response(
         "weather_snapshot": weather_snapshot,
         "fallback_reason": fallback_reason,
         "tool_trace": tool_trace,
-        "decision_summary": _build_decision_summary(
-            scene=constraints.get("planning_scene") or ("weekend_trip" if payload.planning_mode == "nearby_trip" else "city_ride"),
-            primary_card={
-                "go_decision": "no_go",
+        "decision": _build_normalized_decision(constraints.get("intent", "ride_plan"), decision_summary),
+        "plan": _build_normalized_route_plan(
+            {
+                "route_code": "NO-MATCH",
                 "route_name": "当前没有合适路线",
+                "distance_km": 0.0,
+                "elevation_gain_m": 0.0,
+                "estimated_duration_hours": 0.0,
                 "risk_level": "unknown",
                 "summary_reason": "动态路线暂时没有可用候选，未使用固定模板生成本次推荐。",
-            },
-            route={},
-            risk={"risk_level": "high"},
-            weather_snapshot=weather_snapshot,
-            constraints=constraints,
-            status="no_match",
+            }
         ),
+        "alternative_plans": [],
+        "explanation": _build_normalized_explanation(decision_summary, clarification_prompt),
+        "risk": _build_normalized_risk(
+            risk_level="unknown",
+            items=[],
+            fallback_plan="请调整时长、出发点或换个时段再试。",
+            scores=None,
+        ),
+        "equipment": _build_normalized_equipment([]),
+        "fallback": _build_normalized_fallback(
+            status="no_match",
+            fallback_reason=fallback_reason,
+            message="请调整时长、出发点或换个时段再试。",
+        ),
+        "decision_summary": decision_summary,
         "route_map": None,
         "roadbook": None,
         "_audit": {
@@ -435,15 +565,12 @@ def _merge_structured_constraints(payload: RidePlanRequestSchema, parsed_constra
     merged["missing_fields"] = structured["missing_fields"]
     merged["confidence"] = structured["confidence"]
     merged["defaults_applied"] = structured["defaults_applied"]
-    merged["planning_mode"] = payload.planning_mode
-    merged["planning_scene"] = payload.planning_scene or merged.get("planning_scene") or (
-        "weekend_trip" if payload.planning_mode == "nearby_trip" else "city_ride"
-    )
     return merged
 
 
 def _build_input_summary(payload: RidePlanRequestSchema, constraints: dict) -> dict:
     summary = {
+        "intent": constraints.get("intent"),
         "input_mode": payload.input_mode,
         "target_date": payload.target_date.isoformat(),
         "departure_time": constraints.get("departure_time"),
@@ -460,10 +587,10 @@ def _build_input_summary(payload: RidePlanRequestSchema, constraints: dict) -> d
     }
     if constraints.get("planning_scene"):
         summary["planning_scene"] = constraints.get("planning_scene")
-    if payload.planning_mode == "nearby_trip":
+    if constraints.get("planning_mode") == "nearby_trip":
         summary.update(
             {
-                "planning_mode": payload.planning_mode,
+                "planning_mode": constraints.get("planning_mode"),
                 "duration_bucket": constraints.get("duration_bucket"),
                 "destination_preferences": constraints.get("destination_preferences", []),
                 "return_preference": constraints.get("return_preference"),
@@ -558,6 +685,7 @@ def _build_nearby_trip_plan(
     payload: RidePlanRequestSchema,
     request_no: str,
     constraints: dict,
+    intent: str,
     user_profile: dict,
     clarification_prompt: str | None,
     weather_snapshot: dict,
@@ -642,9 +770,11 @@ def _build_nearby_trip_plan(
             "fallback_reason": None,
         },
     )
+    decision_summary = _build_trip_decision_summary(recommended_card, recommended, trip_risks, constraints, weather_snapshot)
     return {
         "request_no": request_no,
         "status": "success",
+        "intent": intent,
         "planning_mode": "nearby_trip",
         "parsed_constraints": constraints,
         "input_summary": _build_input_summary(payload, constraints),
@@ -659,7 +789,23 @@ def _build_nearby_trip_plan(
         "weather_snapshot": weather_snapshot,
         "fallback_reason": fallback_reason,
         "tool_trace": tool_trace,
-        "decision_summary": _build_trip_decision_summary(recommended_card, recommended, trip_risks, constraints, weather_snapshot),
+        "decision": _build_normalized_decision(intent, decision_summary),
+        "plan": _build_normalized_weekend_plan(recommended_card),
+        "alternative_plans": [_build_normalized_weekend_plan(build_nearby_trip_card(item)) for item in alternatives],
+        "explanation": _build_normalized_explanation(decision_summary, clarification_prompt),
+        "risk": _build_normalized_risk(
+            risk_level=recommended["risk"].get("risk_level"),
+            items=trip_risks.get("risk_items", []),
+            fallback_plan=trip_risks.get("fallback_plan"),
+            scores=recommended["risk"],
+        ),
+        "equipment": _build_normalized_equipment(recommended_card.get("equipment_advice", [])),
+        "fallback": _build_normalized_fallback(
+            status="success",
+            fallback_reason=fallback_reason,
+            message=trip_risks.get("fallback_plan"),
+        ),
+        "decision_summary": decision_summary,
         "route_map": _build_route_map(recommended["route"]),
         "roadbook": {
             "departure_window": recommended_card["recommended_departure_time"],

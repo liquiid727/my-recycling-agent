@@ -38,6 +38,7 @@ test("submits planner request with saved user profile", async () => {
       if (String(_url) === "/api/v1/ride/chat/turn") {
         return {
           assistant_name: "AAA骑车帮帮",
+          intent: "ride_plan",
           assistant_message: "收到，我先帮你看今晚适不适合骑。",
           slot_state: { start_point: "滨江", available_hours: 3 },
           missing_slots: [],

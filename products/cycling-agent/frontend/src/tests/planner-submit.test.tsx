@@ -18,6 +18,7 @@ test("submits query and shows loading state", async () => {
           ok: true,
           json: async () => ({
             assistant_name: "AAA骑车帮帮",
+            intent: "ride_plan",
             assistant_message: "收到，滨江出发，骑 3 小时。我先帮你看今晚适不适合骑。",
             slot_state: { start_point: "滨江", available_hours: 3 },
             missing_slots: [],
@@ -73,6 +74,7 @@ test("shows staged planner feedback while stream is active", async () => {
           ok: true,
           json: async () => ({
             assistant_name: "AAA骑车帮帮",
+            intent: "ride_plan",
             assistant_message: "收到，我先帮你看今晚适不适合骑。",
             slot_state: { start_point: "滨江", available_hours: 3 },
             missing_slots: [],

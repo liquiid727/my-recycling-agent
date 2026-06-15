@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/v1/ride/chat", tags=["ride-chat"])
 async def create_chat_turn(payload: ChatTurnRequestSchema, request: Request) -> ChatTurnResponseSchema:
     response = build_chat_turn(
         messages=[message.model_dump() for message in payload.messages],
+        intent=payload.intent,
         planning_scene=payload.planning_scene,
         target_date=payload.target_date,
         slot_state=payload.slot_state,

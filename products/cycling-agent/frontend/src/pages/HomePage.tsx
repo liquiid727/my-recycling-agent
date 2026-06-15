@@ -23,16 +23,16 @@ export default function HomePage() {
   const {
     clarificationPrompt,
     error,
+    intent,
     inputMode,
     loading,
     loadingLabel,
     messages,
-    planningMode,
     quickReplies,
     query,
     result,
     setInputMode,
-    setPlanningMode,
+    setIntent,
     setQuery,
     setQueryFromQuickReply,
     setStructuredField,
@@ -65,9 +65,9 @@ export default function HomePage() {
         <h1>AAA骑车帮帮</h1>
         <p className="hero-copy">像和朋友聊天一样说出你想怎么骑。我会先帮你判断值不值得出发，再给轻松、可执行的路线选择。</p>
         <div className="hero-stat-row" aria-label="规划输出内容">
-          <span>先给结论</span>
-          <span>轻松追问</span>
-          <span>路线与天气</span>
+          <span>今天能不能骑</span>
+          <span>帮我安排一次骑行</span>
+          <span>周末去哪骑</span>
         </div>
         <p className="hero-link-row">
           <Link to="/settings">打开偏好设置</Link>
@@ -76,15 +76,24 @@ export default function HomePage() {
 
       <section className="planner-panel">
         <form className="planner-form" onSubmit={submit}>
-          <div className="segmented-control" aria-label="MVP 阶段规划模式">
-            <button type="button" aria-pressed={planningMode === "route"} onClick={() => setPlanningMode("route")}>
-              今晚 / 下午骑一下
+          <div className="segmented-control" aria-label="骑行意图">
+            <button type="button" aria-pressed={intent === "ride_today"} onClick={() => setIntent("ride_today")}>
+              今天适合骑吗
             </button>
-            <button type="button" aria-pressed={planningMode === "nearby_trip"} onClick={() => setPlanningMode("nearby_trip")}>
-              周末骑行出行
+            <button type="button" aria-pressed={intent === "ride_plan"} onClick={() => setIntent("ride_plan")}>
+              帮我安排一次骑行
+            </button>
+            <button type="button" aria-pressed={intent === "weekend_recommendation"} onClick={() => setIntent("weekend_recommendation")}>
+              周末去哪骑
             </button>
           </div>
-          <p className="planner-hint">{planningMode === "nearby_trip" ? "2 到 3 天游骑行计划" : "市区内即时骑行决策"}</p>
+          <p className="planner-hint">
+            {intent === "weekend_recommendation"
+              ? "目的地方向、天数、住宿和返程建议"
+              : intent === "ride_plan"
+                ? "出发点、时长、风格和稳妥路线"
+                : "先判断今天值不值得骑，再给保守建议"}
+          </p>
 
           <div className="segmented-control" aria-label="规划输入方式">
             <button type="button" aria-pressed={inputMode === "natural"} onClick={() => setInputMode("natural")}>
@@ -97,7 +106,7 @@ export default function HomePage() {
 
           <section className="chat-panel" aria-label="骑行规划对话">
             <div className="quick-reply-row" aria-label="快捷回复">
-              {(quickReplies.length > 0 ? quickReplies : ["今晚轻松骑", "现在出发", "不要爬坡", "骑 2 小时", "周末两天", "千岛湖"]).map((reply) => (
+              {((quickReplies ?? []).length > 0 ? quickReplies : ["今天适合骑吗", "骑 2 小时", "不要爬坡", "周末两天", "千岛湖"]).map((reply) => (
                 <button key={reply} type="button" className="quick-reply-chip" onClick={() => setQueryFromQuickReply(reply)}>
                   {reply}
                 </button>
@@ -113,7 +122,7 @@ export default function HomePage() {
               {loading ? (
                 <article className="chat-message chat-message-assistant">
                   <span>AAA骑车帮帮</span>
-                  <p>{loadingLabel ?? (planningMode === "nearby_trip" ? "我正在整理周末出行方案，先给你结论。" : "我正在看天气和路线难度。")}</p>
+                  <p>{loadingLabel ?? (intent === "weekend_recommendation" ? "我正在整理周末出行方案，先给你结论。" : "我正在看天气和路线难度。")}</p>
                 </article>
               ) : null}
             </div>
@@ -126,12 +135,14 @@ export default function HomePage() {
                   className="planner-input"
                   placeholder={
                     clarificationPrompt
-                      ? planningMode === "nearby_trip"
+                      ? intent === "weekend_recommendation"
                         ? "直接回复：从杭州市区出发，骑两天，可以过夜"
                         : "直接回复：从闻涛路滨江段出发，骑 2 小时，不要爬坡"
-                      : planningMode === "nearby_trip"
+                      : intent === "weekend_recommendation"
                         ? "例如：周末想出去骑车，附近有什么推荐线路么"
-                        : "例如：我今天晚上想出去骑行一下"
+                        : intent === "ride_plan"
+                          ? "例如：从滨江出发骑两小时，不想太累"
+                          : "例如：我今天晚上想出去骑行一下"
                   }
                   rows={3}
                   value={query}
@@ -226,7 +237,7 @@ export default function HomePage() {
                   onChange={(event) => setStructuredField("target_distance_km", event.target.value)}
                 />
               </label>
-              {planningMode === "nearby_trip" ? (
+              {intent === "weekend_recommendation" ? (
                 <>
                   <label className="field-label" htmlFor="duration-bucket">
                     出行时长
@@ -254,7 +265,7 @@ export default function HomePage() {
                     </select>
                   </label>
                   <label className="field-label" htmlFor="overnight-preference">
-                    过夜偏好
+                    过夜偏好（两天以上更关键）
                     <select
                       id="overnight-preference"
                       value={structuredConstraints.overnight_preference ?? "required"}
@@ -358,7 +369,7 @@ export default function HomePage() {
         {loading ? (
           <article className="state-panel">
             <h2>{loadingLabel ?? "正在生成路线建议"}</h2>
-            <p>{planningMode === "nearby_trip" ? "系统正在匹配周末目的地、路线模板、住宿、装备、天气窗口、返程方案与风险。" : "系统正在解析需求、确认出发点、匹配市区路线，并计算天气与风险。"}</p>
+            <p>{intent === "weekend_recommendation" ? "系统正在匹配周末目的地、路线模板、住宿、装备、天气窗口、返程方案与风险。" : "系统正在解析需求、确认出发点、匹配市区路线，并计算天气与风险。"}</p>
             {stageUpdates.length > 0 ? (
               <ul className="stage-update-list">
                 {stageUpdates.map((stage, index) => (
