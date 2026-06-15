@@ -10,7 +10,13 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.storage import init_storage
-from app.schemas.ride_plan import CreateRideRecordRequestSchema
+from app.schemas.ride_plan import (
+    CreateRideRecordRequestSchema,
+    RideRecordDetailResponseSchema,
+    RideRecordListResponseSchema,
+    RideRecordPayload,
+    RideSummarySchema,
+)
 
 
 def test_save_and_list_ride_records(tmp_path) -> None:
@@ -38,7 +44,7 @@ def test_save_and_list_ride_records(tmp_path) -> None:
         "completion_status": "completed",
         "actual_duration_hours": 2.5,
         "actual_distance_km": 48.2,
-        "effort_feeling": "moderate",
+        "effort_feeling": "steady",
         "mood_after": "refreshed",
         "notes": "风不大，江边体感不错。",
         "tags": ["evening", "riverside"],
@@ -61,6 +67,7 @@ def test_save_and_list_ride_records(tmp_path) -> None:
     saved = repository.get_ride_record(database_url, "RR-20260615-001")
     assert saved == payload
     assert saved["payload"]["route_snapshot"]["route_title"] == "闻涛路晚风线"
+    assert RideRecordPayload.model_validate({k: v for k, v in saved.items() if k != "payload"}).effort_feeling == "steady"
 
     listed = repository.list_ride_records(database_url)
     assert listed == [payload]
@@ -107,6 +114,87 @@ def test_create_ride_record_request_schema_enforces_flat_contract() -> None:
             effort_feeling="moderate",
             mood_after="normal",
         )
+
+    with pytest.raises(ValidationError):
+        CreateRideRecordRequestSchema(
+            entry_mode="planned",
+            ride_date="2026-06-15",
+            completion_status="partial",
+            effort_feeling="steady",
+            mood_after="normal",
+        )
+
+    with pytest.raises(ValidationError):
+        CreateRideRecordRequestSchema(
+            entry_mode="planned",
+            ride_date="2026-06-15",
+            completion_status="completed",
+            effort_feeling="steady",
+            mood_after="steady",
+        )
+
+
+def test_ride_record_response_schemas_validate_representative_payloads() -> None:
+    ride_record = {
+        "ride_record_no": "RR-20260615-001",
+        "entry_mode": "planned",
+        "source_request_no": "RQ-TEST-001",
+        "ride_date": "2026-06-15",
+        "intent": "ride_today",
+        "plan_kind": "route",
+        "route_code": "DYN-HANGZHOU-001",
+        "route_title": "闻涛路晚风线",
+        "destination_name": "钱塘江南岸",
+        "start_point": "闻涛路滨江段",
+        "origin_region": "滨江",
+        "completion_status": "completed",
+        "actual_duration_hours": 2.5,
+        "actual_distance_km": 48.2,
+        "effort_feeling": "steady",
+        "mood_after": "normal",
+        "notes": "记录一次按计划完成的骑行。",
+        "tags": ["evening", "riverside"],
+    }
+    ride_summary = {
+        "headline": "按计划完成钱塘江晚骑",
+        "summary": "整体节奏稳定，路线执行与预期基本一致。",
+        "completion_assessment": "完整完成计划路线。",
+        "effort_assessment": "体感稳定，没有明显掉速。",
+        "recovery_advice": "补水后做轻度拉伸。",
+        "next_ride_prompt": "下次可尝试略微增加距离。",
+        "plan_alignment": "与计划路线高度一致",
+        "confidence_notes": ["基于手动记录整理"],
+    }
+
+    validated_record = RideRecordPayload.model_validate(ride_record)
+    assert validated_record.entry_mode == "planned"
+    assert validated_record.effort_feeling == "steady"
+
+    validated_summary = RideSummarySchema.model_validate(ride_summary)
+    assert validated_summary.headline == "按计划完成钱塘江晚骑"
+    assert validated_summary.confidence_notes == ["基于手动记录整理"]
+
+    list_response = RideRecordListResponseSchema.model_validate(
+        {
+            "items": [
+                {
+                    "ride_record_no": "RR-20260615-001",
+                    "ride_date": "2026-06-15",
+                    "route_title": "闻涛路晚风线",
+                    "destination_name": "钱塘江南岸",
+                    "completion_status": "completed",
+                    "summary_headline": "按计划完成钱塘江晚骑",
+                }
+            ]
+        }
+    )
+    assert list_response.items[0].summary_headline == "按计划完成钱塘江晚骑"
+
+    detail_response = RideRecordDetailResponseSchema.model_validate(
+        {"ride_record": ride_record, "ride_summary": ride_summary}
+    )
+    assert detail_response.ride_record.route_title == "闻涛路晚风线"
+    assert detail_response.ride_summary.recovery_advice == "补水后做轻度拉伸。"
 
 
 def _load_repository_module():
