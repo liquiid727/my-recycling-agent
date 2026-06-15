@@ -217,6 +217,19 @@ def test_ride_record_response_schemas_validate_representative_payloads() -> None
     )
     assert list_response.items[0].summary_headline == "按计划完成钱塘江晚骑"
 
+    with pytest.raises(ValidationError):
+        RideRecordListResponseSchema.model_validate(
+            {
+                "items": [
+                    {
+                        "ride_record_no": "RR-20260615-002",
+                        "ride_date": "2026-06-15",
+                        "completion_status": "partial",
+                    }
+                ]
+            }
+        )
+
     detail_response = RideRecordDetailResponseSchema.model_validate(
         {"ride_record": ride_record, "ride_summary": ride_summary}
     )

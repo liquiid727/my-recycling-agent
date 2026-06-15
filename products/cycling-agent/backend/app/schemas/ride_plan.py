@@ -455,7 +455,7 @@ class RideRecordListItemSchema(BaseModel):
     ride_date: date
     route_title: str | None = None
     destination_name: str | None = None
-    completion_status: str
+    completion_status: str = Field(pattern=RIDE_RECORD_COMPLETION_STATUS_PATTERN)
     summary_headline: str | None = None
 
 
