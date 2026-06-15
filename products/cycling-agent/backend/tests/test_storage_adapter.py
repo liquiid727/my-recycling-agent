@@ -6,6 +6,7 @@ import sys
 import types
 
 from app.core.storage import _translate_query_for_postgres, connect, database_kind, init_storage
+from app.repositories.ride_record_repository import save_ride_record
 
 
 class FakeCursor:
@@ -77,5 +78,43 @@ def test_init_storage_runs_postgres_ddl(monkeypatch) -> None:
 
     init_storage("postgresql://user:pass@localhost:5432/cycling_agent")
 
-    assert any("CREATE TABLE IF NOT EXISTS ride_plans" in query for query, _ in fake_connection.cursor_obj.executed)
-    assert any("BIGSERIAL PRIMARY KEY" in query for query, _ in fake_connection.cursor_obj.executed)
+    executed_queries = [query for query, _ in fake_connection.cursor_obj.executed]
+    ride_records_ddl = next(query for query in executed_queries if "CREATE TABLE IF NOT EXISTS ride_records" in query)
+    assert any("CREATE TABLE IF NOT EXISTS ride_plans" in query for query in executed_queries)
+    assert any("BIGSERIAL PRIMARY KEY" in query for query in executed_queries)
+    assert "destination_name TEXT" in ride_records_ddl
+    assert "start_point TEXT" in ride_records_ddl
+    assert "payload_json TEXT NOT NULL" in ride_records_ddl
+    assert "updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP" in ride_records_ddl
+
+
+def test_ride_record_repository_uses_postgres_adapter_for_save(monkeypatch) -> None:
+    fake_connection = FakeConnection()
+    fake_psycopg = types.SimpleNamespace(connect=lambda *args, **kwargs: fake_connection)
+    fake_rows = types.SimpleNamespace(dict_row="dict_row")
+    monkeypatch.setitem(sys.modules, "psycopg", fake_psycopg)
+    monkeypatch.setitem(sys.modules, "psycopg.rows", fake_rows)
+
+    save_ride_record(
+        "postgresql://user:pass@localhost:5432/cycling_agent",
+        {
+            "ride_record_no": "RR-PG-001",
+            "entry_mode": "manual",
+            "ride_date": "2026-06-15",
+            "destination_name": "钱塘江南岸",
+            "start_point": "闻涛路滨江段",
+            "completion_status": "completed",
+            "effort_feeling": "steady",
+            "mood_after": "refreshed",
+            "tags": ["postgres-path"],
+        },
+    )
+
+    insert_query, params = fake_connection.cursor_obj.executed[0]
+    assert "INSERT INTO ride_records" in insert_query
+    assert "payload_json" in insert_query
+    assert "%s" in insert_query
+    assert "?" not in insert_query
+    assert params[0] == "RR-PG-001"
+    assert params[8] == "钱塘江南岸"
+    assert params[9] == "闻涛路滨江段"
