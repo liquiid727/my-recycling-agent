@@ -78,6 +78,7 @@ products/cycling-agent/
 
 - `agents/query_parser_agent.py`: QueryParserAgent 的 deterministic fallback，负责把自然语言需求解析成结构化约束，并生成澄清提示。
 - `api/routes/ride_plan.py`: 规划入口，包含普通 `POST /api/v1/ride/plan` 和 SSE `POST /api/v1/ride/plan/stream`。
+- `api/routes/ride_record.py`: 骑后记录入口，负责创建、列表和详情读取。
 - `api/routes/route_catalog.py`: 推荐路线列表和路线详情。
 - `api/routes/profile.py`: 默认用户偏好读取与保存。
 - `api/routes/admin.py`: 路线模板、周边目的地、周边游模板、城市策略、风险规则、查询日志、审计记录后台接口。
@@ -87,7 +88,7 @@ products/cycling-agent/
 - `providers/`: 天气、路线、POI、LLM provider。
 - `repositories/`: 数据访问层，保持 API/服务不直接写 SQL。
 - `schemas/ride_plan.py`: Pydantic API schema 和审计 schema。
-- `services/`: 路线匹配、周边游匹配、风险评分、城市策略、路书、主编排器。
+- `services/`: 路线匹配、周边游匹配、风险评分、城市策略、路书、骑后总结、主编排器。
 
 ## 4. 一次规划请求如何流转
 
@@ -165,6 +166,9 @@ mvp2 额外包含：
 - 结构化审计：请求、天气、候选风险、最终决策分表保存。
 - 周边出行模式：支持主周边出行方案、1 到 2 个备选方案、目的地停留、多天节奏、住宿、装备、天气窗口、天气 / 拥挤 / 体力 / 返程风险和 fallback plan。
 - 周边后台维护：支持 `NearbyDestination` 和 `TripTemplate` 维护，TripTemplate 显式关联 mvp1 路线模板与周边目的地模板。
+- 骑后记录闭环：支持从已保存 `ride_plan` 结果页进入骑后记录，也支持无来源规划的手动补录。
+- 骑后总结生成：基于 `ride_record` 与可选 `ride_plan` 生成结构化 `ride_summary`，包含完成判断、体感判断、恢复建议、下次建议和计划对齐。
+- 最近骑行回看：前端新增 `/rides`、`/rides/new`、`/rides/:rideRecordNo`，支持查看最近记录、详情和骑后总结。
 
 ## 6. 前端结构
 
@@ -174,13 +178,16 @@ mvp2 额外包含：
 
 - `/`: `HomePage.tsx`，输入需求、切换“今天适合骑吗 / 帮我安排一次骑行 / 周末去哪骑”三种 intent、展示阶段反馈、澄清提示和即时规划结果。
 - `/plans/:requestNo`: `PlanResultPage.tsx`，读取后端保存的规划结果。
+- `/rides`: `RideRecordsPage.tsx`，查看最近骑行记录列表。
+- `/rides/new`: `RideRecordPage.tsx`，从结果页继续记录骑后事实，或手动补录一次骑行。
+- `/rides/:rideRecordNo`: `RideRecordDetailPage.tsx`，查看单条骑行记录和生成后的骑后总结。
 - `/routes/:routeCode`: `RouteDetailPage.tsx`，查看路线模板详情。
 - `/settings`: `SettingsPage.tsx`，编辑体能、坡度容忍、骑行风格，并同步到后端。
 - `/admin`: `AdminPage.tsx`，按决策规则、路线资产、周末资产、陪伴话术四个桶维护后台资产，并查看查询日志。
 
 主要前端模块：
 
-- `features/planner/api.ts`: 封装规划请求、SSE 解析、路线详情和历史结果读取。
+- `features/planner/api.ts`: 封装规划请求、SSE 解析、路线详情、历史结果读取和骑后记录接口。
 - `features/planner/hooks.ts`: 管理首页规划流程状态，SSE 失败时回退普通请求。
 - `features/settings/store.ts`: 用户偏好远端同步与 localStorage fallback。
 - `components/*`: 结果展示组件，包括推荐卡片、天气、风险拆解、路书、备选路线。
@@ -207,15 +214,17 @@ mvp2 额外包含：
 后端测试覆盖：
 
 - API：规划、路线、用户偏好、后台、审计。
+- API：骑后记录创建、列表、详情与关键错误语义。
 - 服务：路线匹配、风险评分、城市策略、路书。
+- 服务：骑后总结规则分支。
 - provider：天气、路线、POI、LLM fallback/live 边界。
-- 存储：SQLite/PostgreSQL 兼容层、缓存层、业务编号。
+- 存储：SQLite/PostgreSQL 兼容层、缓存层、业务编号、`ride_records` 持久化。
 
 前端测试覆盖：
 
 - 首页提交和状态展示。
 - no_match 与澄清提示。
-- 结果页、路线详情页、设置页、后台页。
+- 结果页、路线详情页、设置页、后台页、骑后记录页、最近记录页。
 - 天气卡片和结果渲染组件。
 
 常用验证命令：
