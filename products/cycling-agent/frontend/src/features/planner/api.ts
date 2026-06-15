@@ -439,6 +439,18 @@ export type RideRecordDetailResponse = {
   ride_summary: RideSummary;
 };
 
+export class ApiRequestError extends Error {
+  status: number;
+  detail?: string;
+
+  constructor(message: string, status: number, detail?: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
 export type RideRecordListItem = {
   ride_record_no: string;
   ride_date: string;
@@ -629,7 +641,7 @@ export async function createRideRecord(payload: CreateRideRecordRequest): Promis
   });
 
   if (!response.ok) {
-    throw new Error(`ride-record-create-request-failed:${response.status}`);
+    throw await buildApiRequestError("ride-record-create-request-failed", response);
   }
 
   return response.json() as Promise<RideRecordDetailResponse>;
@@ -695,6 +707,20 @@ function parseSseEvent(block: string): { event: string; data: unknown } | null {
     event: eventLine.replace("event: ", "").trim(),
     data: JSON.parse(dataLines.map((line) => line.replace("data: ", "")).join("\n"))
   };
+}
+
+async function buildApiRequestError(prefix: string, response: Response): Promise<ApiRequestError> {
+  const detail = await readErrorDetail(response);
+  return new ApiRequestError(`${prefix}:${response.status}${detail ? `:${detail}` : ""}`, response.status, detail);
+}
+
+async function readErrorDetail(response: Response): Promise<string | undefined> {
+  try {
+    const payload = (await response.json()) as { detail?: unknown };
+    return typeof payload.detail === "string" ? payload.detail : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 import type { UserProfile } from "../settings/store";

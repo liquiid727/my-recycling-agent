@@ -99,8 +99,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test("loads planned ride context, submits, and navigates to detail page", async () => {
+test("planned entry shows estimate as reference only and does not submit fake actual duration by default", async () => {
   const user = userEvent.setup();
+  let postedBody: Record<string, unknown> | null = null;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -109,6 +110,7 @@ test("loads planned ride context, submits, and navigates to detail page", async 
         return { ok: true, json: async () => plannedRidePlan };
       }
       if (url === "/api/v1/rides/records" && init?.method === "POST") {
+        postedBody = JSON.parse(String(init.body));
         return { ok: true, json: async () => createdRideRecord };
       }
       if (url === "/api/v1/rides/records/RR-TEST0001") {
@@ -129,6 +131,8 @@ test("loads planned ride context, submits, and navigates to detail page", async 
 
   expect(screen.getByText("正在加载关联规划...")).toBeInTheDocument();
   expect(await screen.findByText("滨江-钱塘江休闲往返线")).toBeInTheDocument();
+  expect(screen.getByText("2.8 h 预计骑行")).toBeInTheDocument();
+  expect(screen.getByLabelText("实际时长（小时）")).toHaveValue(null);
 
   await user.clear(screen.getByLabelText("实际距离（km）"));
   await user.type(screen.getByLabelText("实际距离（km）"), "41.2");
@@ -138,9 +142,116 @@ test("loads planned ride context, submits, and navigates to detail page", async 
 
   expect(await screen.findByText("滨江-钱塘江休闲往返线这次完成得很稳。")).toBeInTheDocument();
   expect(screen.getByText("记录编号：RR-TEST0001")).toBeInTheDocument();
+  expect(postedBody).toMatchObject({
+    entry_mode: "planned",
+    source_request_no: "RQ-TEST0001",
+    ride_date: "2026-06-15",
+    completion_status: "completed",
+    actual_distance_km: 41.2,
+    effort_feeling: "steady",
+    mood_after: "refreshed",
+    notes: "后半段有点逆风，但整体稳定。",
+    tags: ["晚骑", "江边"],
+  });
+  expect(postedBody).not.toHaveProperty("actual_duration_hours");
+  expect(postedBody).not.toHaveProperty("route_code");
 });
 
-test("shows planned-load and submit error states", async () => {
+test("manual entry validates required fields before submit", async () => {
+  const user = userEvent.setup();
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(
+    <MemoryRouter initialEntries={["/rides/new"]}>
+      <Routes>
+        <Route path="/rides/new" element={<RideRecordPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  await user.click(screen.getByRole("button", { name: "保存骑行记录" }));
+
+  expect(screen.getByRole("alert")).toHaveTextContent("手动补录至少填写路线标题或目的地。");
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("manual entry submits the expected payload fields", async () => {
+  const user = userEvent.setup();
+  let postedBody: Record<string, unknown> | null = null;
+  const manualRideRecord = {
+    ...createdRideRecord,
+    ride_record: {
+      ...createdRideRecord.ride_record,
+      ride_record_no: "RR-MANUAL001",
+      entry_mode: "manual",
+      source_request_no: null,
+      route_code: null,
+      route_title: "湘湖绕湖骑",
+      destination_name: "湘湖",
+      start_point: "湘湖游客中心",
+      origin_region: "萧山",
+      completion_status: "shortened",
+      actual_duration_hours: 1.6,
+      actual_distance_km: null,
+      notes: "下午太晒，提前收了。",
+      tags: ["补录", "短收"],
+    },
+  };
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/v1/rides/records" && init?.method === "POST") {
+        postedBody = JSON.parse(String(init.body));
+        return { ok: true, json: async () => manualRideRecord };
+      }
+      if (url === "/api/v1/rides/records/RR-MANUAL001") {
+        return { ok: true, json: async () => manualRideRecord };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }),
+  );
+
+  render(
+    <MemoryRouter initialEntries={["/rides/new"]}>
+      <Routes>
+        <Route path="/rides/new" element={<RideRecordPage />} />
+        <Route path="/rides/:rideRecordNo" element={<RideRecordDetailPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  const rideDate = (screen.getByLabelText("骑行日期") as HTMLInputElement).value;
+  await user.type(screen.getByLabelText("路线标题"), "湘湖绕湖骑");
+  await user.type(screen.getByLabelText("目的地"), "湘湖");
+  await user.type(screen.getByLabelText("起点"), "湘湖游客中心");
+  await user.type(screen.getByLabelText("出发区域"), "萧山");
+  await user.selectOptions(screen.getByLabelText("完成情况"), "shortened");
+  await user.type(screen.getByLabelText("实际时长（小时）"), "1.6");
+  await user.type(screen.getByLabelText("备注"), "下午太晒，提前收了。");
+  await user.type(screen.getByLabelText("标签（逗号分隔）"), "补录, 短收");
+  await user.click(screen.getByRole("button", { name: "保存骑行记录" }));
+
+  expect(await screen.findByText("记录编号：RR-MANUAL001")).toBeInTheDocument();
+  expect(postedBody).toEqual({
+    entry_mode: "manual",
+    ride_date: rideDate,
+    route_title: "湘湖绕湖骑",
+    destination_name: "湘湖",
+    start_point: "湘湖游客中心",
+    origin_region: "萧山",
+    completion_status: "shortened",
+    actual_duration_hours: 1.6,
+    effort_feeling: "steady",
+    mood_after: "refreshed",
+    notes: "下午太晒，提前收了。",
+    tags: ["补录", "短收"],
+  });
+});
+
+test("shows actionable validation and submit errors on planned entry", async () => {
   const user = userEvent.setup();
   let resolvePlan!: (value: {
     ok: boolean;
@@ -157,7 +268,11 @@ test("shows planned-load and submit error states", async () => {
         });
       }
       if (url === "/api/v1/rides/records" && init?.method === "POST") {
-        return Promise.resolve({ ok: false, status: 422 });
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: async () => ({ detail: "ride-record-source-plan-not-found" }),
+        });
       }
       throw new Error(`unexpected fetch: ${url}`);
     }),
@@ -178,7 +293,12 @@ test("shows planned-load and submit error states", async () => {
   expect(await screen.findByText("滨江-钱塘江休闲往返线")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "保存骑行记录" }));
 
+  expect(screen.getByRole("alert")).toHaveTextContent("已完成的骑行至少填写实际时长或实际距离之一。");
+
+  await user.type(screen.getByLabelText("实际距离（km）"), "35");
+  await user.click(screen.getByRole("button", { name: "保存骑行记录" }));
+
   await waitFor(() => {
-    expect(screen.getByRole("alert")).toHaveTextContent("骑行记录暂时没保存成功，请稍后再试。");
+    expect(screen.getByRole("alert")).toHaveTextContent("关联的原规划不存在，建议返回结果页重新打开后再记录。");
   });
 });

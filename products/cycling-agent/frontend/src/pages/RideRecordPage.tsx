@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import ThemeToggle from "../components/ThemeToggle";
 import {
+  ApiRequestError,
   createRideRecord,
   getRidePlan,
   type CreateRideRecordRequest,
@@ -94,12 +95,6 @@ export default function RideRecordPage() {
             readString(payload.parsed_constraints, "origin_region"),
             current.originRegion,
           ),
-          actualDurationHours:
-            payload.plan?.estimated_duration_hours != null
-              ? String(payload.plan.estimated_duration_hours)
-              : payload.recommended_plan.estimated_duration_hours != null
-                ? String(payload.recommended_plan.estimated_duration_hours)
-                : current.actualDurationHours,
         }));
         setLoading(false);
       })
@@ -118,14 +113,20 @@ export default function RideRecordPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setSubmitError(null);
+    const validationError = validateRideRecordForm(form, entryMode);
+    if (validationError) {
+      setSubmitError(validationError);
+      return;
+    }
+
+    setSaving(true);
 
     try {
-      const response = await createRideRecord(buildPayload(form, entryMode, sourceRequestNo, sourcePlan));
+      const response = await createRideRecord(buildPayload(form, entryMode, sourceRequestNo));
       navigate(`/rides/${response.ride_record.ride_record_no}`);
-    } catch {
-      setSubmitError("骑行记录暂时没保存成功，请稍后再试。");
+    } catch (error) {
+      setSubmitError(toCreateRideRecordErrorMessage(error));
       setSaving(false);
     }
   }
@@ -359,16 +360,12 @@ function buildPayload(
   form: RideRecordFormState,
   entryMode: "planned" | "manual",
   sourceRequestNo: string,
-  sourcePlan: RidePlanResponse | null,
 ): CreateRideRecordRequest {
   return {
     entry_mode: entryMode,
     source_request_no: entryMode === "planned" ? sourceRequestNo : undefined,
     ride_date: form.rideDate,
-    route_code:
-      entryMode === "manual"
-        ? emptyToUndefined(sourcePlan?.plan?.code ?? sourcePlan?.recommended_plan.route_code)
-        : undefined,
+    route_code: undefined,
     route_title: entryMode === "manual" ? emptyToUndefined(form.routeTitle) : undefined,
     destination_name: entryMode === "manual" ? emptyToUndefined(form.destinationName) : undefined,
     start_point: entryMode === "manual" ? emptyToUndefined(form.startPoint) : undefined,
@@ -381,6 +378,22 @@ function buildPayload(
     notes: emptyToUndefined(form.notes),
     tags: parseTags(form.tags),
   };
+}
+
+function validateRideRecordForm(form: RideRecordFormState, entryMode: "planned" | "manual"): string | null {
+  if (entryMode === "manual" && !hasExplicitValue(form.routeTitle) && !hasExplicitValue(form.destinationName)) {
+    return "手动补录至少填写路线标题或目的地。";
+  }
+
+  if (
+    form.completionStatus === "completed" &&
+    !hasExplicitValue(form.actualDurationHours) &&
+    !hasExplicitValue(form.actualDistanceKm)
+  ) {
+    return "已完成的骑行至少填写实际时长或实际距离之一。";
+  }
+
+  return null;
 }
 
 function parseTags(input: string): string[] {
@@ -405,7 +418,11 @@ function emptyToUndefined(value: string | null | undefined): string | undefined 
 }
 
 function todayAsDateInput(): string {
-  return new Date().toISOString().slice(0, 10);
+  const date = new Date();
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function readString(payload: Record<string, unknown>, key: string): string | undefined {
@@ -415,6 +432,28 @@ function readString(payload: Record<string, unknown>, key: string): string | und
 
 function firstString(...values: Array<string | null | undefined>): string {
   return values.find((value) => typeof value === "string" && value.trim()) ?? "";
+}
+
+function hasExplicitValue(value: string): boolean {
+  return value.trim().length > 0;
+}
+
+function toCreateRideRecordErrorMessage(error: unknown): string {
+  if (error instanceof ApiRequestError) {
+    switch (error.detail) {
+      case "ride-record-manual-title-missing":
+        return "手动补录至少填写路线标题或目的地。";
+      case "ride-record-completed-metrics-missing":
+        return "已完成的骑行至少填写实际时长或实际距离之一。";
+      case "ride-record-source-request-missing":
+        return "关联规划缺少来源编号，建议返回结果页重新进入后再记录。";
+      case "ride-record-source-plan-not-found":
+        return "关联的原规划不存在，建议返回结果页重新打开后再记录。";
+      default:
+        return "骑行记录暂时没保存成功，请稍后再试。";
+    }
+  }
+  return "骑行记录暂时没保存成功，请稍后再试。";
 }
 
 function updateForm<Key extends keyof RideRecordFormState>(
