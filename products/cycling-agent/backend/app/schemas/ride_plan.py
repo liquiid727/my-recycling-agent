@@ -424,8 +424,8 @@ class RideRecordPayload(BaseModel):
     start_point: str | None = None
     origin_region: str | None = None
     completion_status: str = Field(pattern=RIDE_RECORD_COMPLETION_STATUS_PATTERN)
-    actual_duration_hours: float | None = None
-    actual_distance_km: float | None = None
+    actual_duration_hours: float | None = Field(default=None, ge=0)
+    actual_distance_km: float | None = Field(default=None, ge=0)
     effort_feeling: str = Field(pattern=RIDE_RECORD_EFFORT_FEELING_PATTERN)
     mood_after: str = Field(pattern=RIDE_RECORD_MOOD_AFTER_PATTERN)
     notes: str | None = None
@@ -442,8 +442,8 @@ class CreateRideRecordRequestSchema(BaseModel):
     start_point: str | None = None
     origin_region: str | None = None
     completion_status: str = Field(pattern=RIDE_RECORD_COMPLETION_STATUS_PATTERN)
-    actual_duration_hours: float | None = None
-    actual_distance_km: float | None = None
+    actual_duration_hours: float | None = Field(default=None, ge=0)
+    actual_distance_km: float | None = Field(default=None, ge=0)
     effort_feeling: str = Field(pattern=RIDE_RECORD_EFFORT_FEELING_PATTERN)
     mood_after: str = Field(pattern=RIDE_RECORD_MOOD_AFTER_PATTERN)
     notes: str | None = None

@@ -31,3 +31,17 @@ def get_ride_plan(database_url: str, request_no: str) -> dict[str, Any] | None:
     if row is None:
         return None
     return json.loads(row["payload_json"])
+
+
+def get_ride_plans(database_url: str, request_nos: list[str]) -> dict[str, dict[str, Any]]:
+    unique_request_nos = list(dict.fromkeys(request_nos))
+    if not unique_request_nos:
+        return {}
+
+    placeholders = ",".join("?" for _ in unique_request_nos)
+    with connect(database_url) as connection:
+        rows = connection.execute(
+            f"SELECT request_no, payload_json FROM ride_plans WHERE request_no IN ({placeholders})",
+            unique_request_nos,
+        ).fetchall()
+    return {row["request_no"]: json.loads(row["payload_json"]) for row in rows}

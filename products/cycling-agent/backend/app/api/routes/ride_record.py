@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.core.ids import generate_business_no
-from app.repositories.plan_result_repository import get_ride_plan
+from app.repositories.plan_result_repository import get_ride_plan, get_ride_plans
 from app.repositories.ride_record_repository import get_ride_record, list_ride_records, save_ride_record
 from app.schemas.ride_plan import (
     CreateRideRecordRequestSchema,
@@ -44,9 +44,14 @@ async def get_ride_records(
     limit: int = Query(default=20, ge=1, le=100),
 ) -> RideRecordListResponseSchema:
     database_url = _require_database_url(request)
+    records = list_ride_records(database_url, limit=limit)
+    source_plans = get_ride_plans(
+        database_url,
+        [record["source_request_no"] for record in records if record.get("source_request_no")],
+    )
     items = []
-    for record in list_ride_records(database_url, limit=limit):
-        source_plan = get_ride_plan(database_url, record["source_request_no"]) if record.get("source_request_no") else None
+    for record in records:
+        source_plan = source_plans.get(record["source_request_no"]) if record.get("source_request_no") else None
         summary = build_ride_summary(record, source_plan=source_plan)
         items.append(
             RideRecordListItemSchema.model_validate(
@@ -125,7 +130,7 @@ def _normalize_saved_ride_record(payload: CreateRideRecordRequestSchema, source_
     return {
         "ride_record_no": generate_business_no("RR"),
         "entry_mode": payload.entry_mode,
-        "source_request_no": payload.source_request_no,
+        "source_request_no": payload.source_request_no if payload.entry_mode == "planned" else None,
         "ride_date": base["ride_date"],
         "intent": (source_plan or {}).get("intent"),
         "plan_kind": _nested_value(source_plan, "plan", "kind"),
