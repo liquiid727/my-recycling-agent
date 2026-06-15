@@ -54,6 +54,50 @@ def test_build_ride_summary_marks_completed_hard_ride_as_slightly_harder_than_ex
     assert "恢复" in validated.recovery_advice
 
 
+def test_build_ride_summary_marks_completed_hard_ride_with_matched_duration_as_body_feedback_only() -> None:
+    summary = _build_summary(
+        {
+            "entry_mode": "planned",
+            "completion_status": "completed",
+            "effort_feeling": "hard",
+            "mood_after": "tired",
+            "actual_duration_hours": 2.0,
+            "actual_distance_km": 38.0,
+            "route_title": "钱塘江拉练线",
+        },
+        source_plan={"recommended_plan": {"estimated_duration_hours": 2.0, "distance_km": 38.0}},
+    )
+
+    validated = RideSummarySchema.model_validate(summary)
+    assert validated.completion_assessment == "completed-as-planned"
+    assert validated.effort_assessment == "slightly-harder-than-expected"
+    assert validated.plan_alignment == "matched-core-plan"
+    assert "体感反馈" in validated.summary
+    assert "时长" not in validated.summary
+
+
+def test_build_ride_summary_marks_completed_longer_ride_as_duration_overrun_without_body_discomfort() -> None:
+    summary = _build_summary(
+        {
+            "entry_mode": "planned",
+            "completion_status": "completed",
+            "effort_feeling": "steady",
+            "mood_after": "refreshed",
+            "actual_duration_hours": 2.7,
+            "actual_distance_km": 41.0,
+            "route_title": "运河耐力线",
+        },
+        source_plan={"recommended_plan": {"estimated_duration_hours": 2.0, "distance_km": 36.0}},
+    )
+
+    validated = RideSummarySchema.model_validate(summary)
+    assert validated.completion_assessment == "completed-as-planned"
+    assert validated.effort_assessment == "slightly-harder-than-expected"
+    assert validated.plan_alignment == "duration-ran-long"
+    assert "时长" in validated.summary
+    assert "体感反馈" not in validated.summary
+
+
 def test_build_ride_summary_frames_shortened_ride_as_partial_completion() -> None:
     summary = _build_summary(
         {

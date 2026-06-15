@@ -15,6 +15,7 @@ def build_ride_summary(record: dict[str, Any], *, source_plan: dict[str, Any] | 
     planned_duration = _planned_duration_hours(source_plan)
     actual_duration = _float_or_none(record.get("actual_duration_hours"))
     materially_above_plan = _is_materially_above_planned_duration(actual_duration, planned_duration)
+    body_feedback_harder = _has_harder_body_feedback(effort_feeling, mood_after)
 
     confidence_notes = ["基于完成状态、体感反馈和计划时长差异的规则生成。"]
     if planned_duration is not None:
@@ -46,15 +47,15 @@ def build_ride_summary(record: dict[str, Any], *, source_plan: dict[str, Any] | 
             "confidence_notes": confidence_notes,
         }
 
-    if _is_harder_than_expected(effort_feeling, mood_after, materially_above_plan):
+    if body_feedback_harder or materially_above_plan:
         return {
             "headline": f"{ride_label}完成了，但这次比预期更顶一点。",
-            "summary": "你把这次骑行完整做完了，不过体感和时长都提示这次比预期更吃力，恢复安排要稍微认真一点。",
+            "summary": _completed_harder_summary(body_feedback_harder, materially_above_plan),
             "completion_assessment": "completed-as-planned",
             "effort_assessment": "slightly-harder-than-expected",
-            "recovery_advice": "今晚优先补水、进食和放松恢复，明天更适合轻松转腿或直接休息。",
+            "recovery_advice": _completed_harder_recovery_advice(body_feedback_harder, materially_above_plan),
             "next_ride_prompt": "下次先把时长或强度略收一点，再看恢复后要不要继续往上加。",
-            "plan_alignment": "duration-ran-long" if source_plan else None,
+            "plan_alignment": _completed_harder_plan_alignment(source_plan, materially_above_plan),
             "confidence_notes": confidence_notes,
         }
 
@@ -83,13 +84,37 @@ def _ride_label(record: dict[str, Any], source_plan: dict[str, Any] | None) -> s
 
 
 def _effort_assessment(effort_feeling: str, mood_after: str, materially_above_plan: bool) -> str:
-    if _is_harder_than_expected(effort_feeling, mood_after, materially_above_plan):
+    if _has_harder_body_feedback(effort_feeling, mood_after) or materially_above_plan:
         return "slightly-harder-than-expected"
     return "matched-expected-effort"
 
 
-def _is_harder_than_expected(effort_feeling: str, mood_after: str, materially_above_plan: bool) -> bool:
-    return effort_feeling == "hard" or mood_after == "tired" or materially_above_plan
+def _has_harder_body_feedback(effort_feeling: str, mood_after: str) -> bool:
+    return effort_feeling == "hard" or mood_after == "tired"
+
+
+def _completed_harder_summary(body_feedback_harder: bool, materially_above_plan: bool) -> str:
+    if body_feedback_harder and materially_above_plan:
+        return "你把这次骑行完整做完了，不过体感反馈和实际时长都提示这次比预期更吃力，恢复安排要稍微认真一点。"
+    if body_feedback_harder:
+        return "你把这次骑行完整做完了，不过体感反馈说明这次比预期更吃力，恢复安排要稍微认真一点。"
+    return "你把这次骑行完整做完了，不过实际时长比计划拉得更长，恢复安排要比常规收得更稳一点。"
+
+
+def _completed_harder_recovery_advice(body_feedback_harder: bool, materially_above_plan: bool) -> str:
+    if body_feedback_harder and materially_above_plan:
+        return "今晚优先补水、进食和放松恢复，明天更适合轻松转腿或直接休息。"
+    if body_feedback_harder:
+        return "今晚优先补水和放松恢复，明天更适合轻松转腿，先观察身体反馈再决定是否加量。"
+    return "这次更像是时长拉长后的额外消耗，今晚按补水、进食和轻拉伸收尾，明天先安排轻松骑即可。"
+
+
+def _completed_harder_plan_alignment(source_plan: dict[str, Any] | None, materially_above_plan: bool) -> str | None:
+    if not source_plan:
+        return None
+    if materially_above_plan:
+        return "duration-ran-long"
+    return "matched-core-plan"
 
 
 def _is_materially_above_planned_duration(actual_duration: float | None, planned_duration: float | None) -> bool:
