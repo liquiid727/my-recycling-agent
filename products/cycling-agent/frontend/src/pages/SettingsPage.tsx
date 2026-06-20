@@ -1,162 +1,131 @@
-/*
- * CN: 偏好设置页，编辑体能、坡度容忍和骑行风格并同步给后端。
- * EN: Settings page for editing fitness, slope tolerance, and ride style preferences and syncing them to backend.
- */
-
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import ThemeToggle from "../components/ThemeToggle";
-import {
-  fetchUserProfile,
-  loadUserProfile,
-  persistUserProfile,
-  saveUserProfile
-} from "../features/settings/store";
+import { ErrorCard, LoadingCard } from "../components/EditorialStates";
+import { useLifestyleProfile } from "../features/lifestyle/hooks";
+
+type LifestyleFormState = {
+  home_region: string;
+  preferred_vibe: string;
+  companion_tone: string;
+  favorite_motifs_text: string;
+  avoid_motifs_text: string;
+};
 
 export default function SettingsPage() {
-  const [profile, setProfile] = useState(loadUserProfile);
-  const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { profile, loading, saving, error, saved, persist } = useLifestyleProfile();
+  const [form, setForm] = useState<LifestyleFormState | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function hydrateProfile() {
-      try {
-        const remoteProfile = await fetchUserProfile();
-        if (cancelled || !remoteProfile) {
-          return;
-        }
-        saveUserProfile(remoteProfile);
-        setProfile(remoteProfile);
-      } catch {
-        if (!cancelled) {
-          setError("当前未能同步远端偏好，已使用本地设置。");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+  const initialForm = useMemo(() => {
+    if (!profile) {
+      return null;
     }
-
-    hydrateProfile();
-    return () => {
-      cancelled = true;
+    return {
+      home_region: profile.home_region ?? "",
+      preferred_vibe: profile.preferred_vibe ?? "",
+      companion_tone: profile.companion_tone ?? "",
+      favorite_motifs_text: profile.favorite_motifs.join(", "),
+      avoid_motifs_text: profile.avoid_motifs.join(", "),
     };
-  }, []);
+  }, [profile]);
 
-  function togglePreference(tag: string) {
-    setSaved(false);
-    setProfile((current) => {
-      const exists = current.ride_style_preferences.includes(tag);
-      return {
-        ...current,
-        ride_style_preferences: exists
-          ? current.ride_style_preferences.filter((item) => item !== tag)
-          : [...current.ride_style_preferences, tag]
-      };
+  const ready = form ?? initialForm;
+
+  function updateForm<K extends keyof LifestyleFormState>(key: K, value: LifestyleFormState[K]) {
+    if (!ready) {
+      return;
+    }
+    setForm({ ...ready, [key]: value });
+  }
+
+  if (loading) {
+    return (
+      <main className="paper-shell">
+        <LoadingCard title="正在读取你的生活方式偏好" body="树荫、咖啡、语气和避开的东西都会落在这一页。" />
+      </main>
+    );
+  }
+
+  if (error || !ready) {
+    return (
+      <main className="paper-shell">
+        <ErrorCard title="偏好页暂时打不开" body={error ?? "请稍后再试。"} />
+      </main>
+    );
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!ready) {
+      return;
+    }
+    void persist({
+      home_region: ready.home_region,
+      preferred_vibe: ready.preferred_vibe,
+      companion_tone: ready.companion_tone,
+      favorite_motifs: ready.favorite_motifs_text.split(",").map((item) => item.trim()).filter(Boolean),
+      avoid_motifs: ready.avoid_motifs_text.split(",").map((item) => item.trim()).filter(Boolean),
     });
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    saveUserProfile(profile);
-    setSaved(false);
-    setError(null);
-    try {
-      const persisted = await persistUserProfile(profile);
-      saveUserProfile(persisted);
-      setProfile(persisted);
-      setSaved(true);
-    } catch {
-      setSaved(true);
-      setError("远端偏好保存失败，当前已保留本地设置。");
-    }
-  }
-
   return (
-    <main className="page-shell">
-      <ThemeToggle />
-      <section className="detail-panel">
-        <div className="section-heading">
-          <p className="section-kicker">Preferences</p>
-          <h1>偏好设置</h1>
-        </div>
-        {loading ? <p className="summary-copy">正在同步已保存偏好...</p> : null}
-        <form className="planner-form" onSubmit={submit}>
-          <label className="field-label" htmlFor="fitness-level">
-            体力等级
+    <main className="paper-shell">
+      <section className="paper-section">
+        <p className="eyebrow">LIFESTYLE PROFILE</p>
+        <h1 className="display-title max-w-[12ch]">把你想留下的骑行质感说清楚。</h1>
+        <form className="mt-8 grid gap-5 lg:grid-cols-2" onSubmit={handleSubmit}>
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold text-ink">常出发片区</span>
+            <input
+              aria-label="常出发片区"
+              className="field-input"
+              value={ready.home_region}
+              onChange={(event) => updateForm("home_region", event.target.value)}
+            />
           </label>
-          <select
-            id="fitness-level"
-            className="planner-input"
-            value={profile.fitness_level}
-            onChange={(event) => {
-              setSaved(false);
-              setProfile((current) => ({
-                ...current,
-                fitness_level: event.target.value as "low" | "medium" | "high" | ""
-              }));
-            }}
-          >
-            <option value="">未设置</option>
-            <option value="low">low</option>
-            <option value="medium">medium</option>
-            <option value="high">high</option>
-          </select>
-
-          <label className="field-label" htmlFor="slope-tolerance">
-            爬坡接受度
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold text-ink">偏好的氛围</span>
+            <input
+              aria-label="偏好的氛围"
+              className="field-input"
+              value={ready.preferred_vibe}
+              onChange={(event) => updateForm("preferred_vibe", event.target.value)}
+            />
           </label>
-          <select
-            id="slope-tolerance"
-            className="planner-input"
-            value={profile.slope_tolerance}
-            onChange={(event) => {
-              setSaved(false);
-              setProfile((current) => ({
-                ...current,
-                slope_tolerance: event.target.value as "avoid" | "neutral" | "prefer" | ""
-              }));
-            }}
-          >
-            <option value="">未设置</option>
-            <option value="avoid">avoid</option>
-            <option value="neutral">neutral</option>
-            <option value="prefer">prefer</option>
-          </select>
-
-          <div className="preference-group">
-            <span className="field-label">风格偏好</span>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={profile.ride_style_preferences.includes("scenic")}
-                onChange={() => togglePreference("scenic")}
-              />
-              风景优先
-            </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={profile.ride_style_preferences.includes("relaxed")}
-                onChange={() => togglePreference("relaxed")}
-              />
-              轻松优先
-            </label>
-          </div>
-
-          <div className="planner-actions">
-            <button className="primary-button" type="submit">
-              保存偏好
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold text-ink">伙伴语气</span>
+            <input
+              aria-label="伙伴语气"
+              className="field-input"
+              value={ready.companion_tone}
+              onChange={(event) => updateForm("companion_tone", event.target.value)}
+            />
+          </label>
+          <label className="block lg:col-span-2">
+            <span className="mb-2 block text-sm font-semibold text-ink">喜欢的意象</span>
+            <input
+              aria-label="喜欢的意象"
+              className="field-input"
+              value={ready.favorite_motifs_text}
+              onChange={(event) => updateForm("favorite_motifs_text", event.target.value)}
+            />
+          </label>
+          <label className="block lg:col-span-2">
+            <span className="mb-2 block text-sm font-semibold text-ink">想避开的东西</span>
+            <input
+              aria-label="想避开的东西"
+              className="field-input"
+              value={ready.avoid_motifs_text}
+              onChange={(event) => updateForm("avoid_motifs_text", event.target.value)}
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-3 lg:col-span-2">
+            <button className="primary-button" disabled={saving} type="submit">
+              {saving ? "保存中..." : "保存偏好"}
             </button>
-            <Link to="/">返回规划页</Link>
+            <Link className="secondary-button" to="/">返回首页</Link>
+            {saved ? <span className="body-copy text-sm text-moss">偏好已保存</span> : null}
           </div>
-          {saved ? <p className="summary-copy">偏好已保存，下次规划会自动带入。</p> : null}
-          {error ? <p className="summary-copy">{error}</p> : null}
         </form>
       </section>
     </main>

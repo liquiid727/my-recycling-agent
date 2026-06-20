@@ -1,75 +1,88 @@
-/*
- * CN: 历史规划结果页，根据 request_no 拉取并展示已保存规划。
- * EN: Saved plan result page that loads and displays a persisted plan by request_no.
- */
-
-import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import PlanResultView from "../components/PlanResultView";
-import ThemeToggle from "../components/ThemeToggle";
-import { getRidePlan, type RidePlanResponse } from "../features/planner/api";
+import { ErrorCard, LoadingCard } from "../components/EditorialStates";
+import { useExperienceResult } from "../features/experience/hooks";
 
 export default function PlanResultPage() {
   const { requestNo = "" } = useParams();
-  const [result, setResult] = useState<RidePlanResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { result, loading, error } = useExperienceResult(requestNo);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError(null);
+  if (loading) {
+    return (
+      <main className="paper-shell">
+        <LoadingCard title="正在翻开这次骑行结果" body="路线、结论和停靠提示正在落到这一页。" />
+      </main>
+    );
+  }
 
-    void getRidePlan(requestNo)
-      .then((payload) => {
-        if (!active) {
-          return;
-        }
-        setResult(payload);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!active) {
-          return;
-        }
-        setError("结果页暂时不可用，请返回首页重新生成。");
-        setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [requestNo]);
+  if (error || !result) {
+    return (
+      <main className="paper-shell">
+        <ErrorCard title="这页骑行结果暂时翻不开" body={error ?? "请回首页重新生成一次。"} />
+      </main>
+    );
+  }
 
   return (
-    <main className="page-shell">
-      <ThemeToggle />
-      <section className="hero-panel">
-        <p className="eyebrow">Plan Result</p>
-        <h1>推荐结果页</h1>
-        <p className="hero-copy">已保存的本次骑行规划结果，支持直接回看主推荐、风险和路书。</p>
-        <p className="hero-link-row">
-          <Link to="/">返回首页</Link>
+    <main className="paper-shell space-y-6">
+      <section className="paper-section">
+        <p className="eyebrow">RESULT JOURNAL</p>
+        <h1 className="display-title max-w-[12ch]">{result.decision.title}</h1>
+        <p className="body-copy mt-4 max-w-3xl text-base">{result.editorial_intro}</p>
+        <p className="body-copy mt-3 max-w-3xl">{result.decision.reason}</p>
+        <p className="mt-4">
+          <Link className="secondary-button" to="/">回到首页</Link>
         </p>
       </section>
 
-      <section className="result-grid">
-        {loading ? (
-          <article className="state-panel">
-            <h2>正在加载推荐结果</h2>
-            <p>系统正在读取已保存的规划结果。</p>
-          </article>
-        ) : null}
+      <section className="grid gap-6 lg:grid-cols-[1fr_0.8fr]">
+        <article className="paper-section">
+          <p className="eyebrow">ROUTE STORY</p>
+          <h2 className="section-title">{result.route_story.route_name}</h2>
+          <p className="body-copy mt-4">{result.route_story.summary}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {result.route_story.tags.map((tag) => (
+              <span className="pill-tag" key={tag}>{tag}</span>
+            ))}
+            <span className="pill-tag">{result.route_story.distance_km} km</span>
+            <span className="pill-tag">{result.route_story.estimated_duration_hours} h</span>
+          </div>
+          <p className="mt-5">
+            <Link className="secondary-button" to={`/routes/${result.route_story.route_code}`}>打开路线详情</Link>
+          </p>
+        </article>
 
-        {error ? (
-          <article className="state-panel state-error" role="alert">
-            <h2>结果读取失败</h2>
-            <p>{error}</p>
-          </article>
-        ) : null}
+        <article className="paper-section">
+          <p className="eyebrow">CONFIDENCE NOTES</p>
+          <ul className="body-copy mt-4 space-y-3 pl-5">
+            {result.decision.confidence_notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+            {result.support_notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </article>
+      </section>
 
-        {result ? <PlanResultView result={result} /> : null}
+      {result.alternative_routes.length > 0 ? (
+        <section className="paper-section">
+          <p className="eyebrow">ALTERNATIVES</p>
+          <h2 className="section-title">如果你想把这页翻得更轻一点</h2>
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            {result.alternative_routes.map((item) => (
+              <article className="rounded-[22px] border border-line bg-white/80 p-5" key={item.route_code}>
+                <h3 className="font-display text-2xl">{item.route_name}</h3>
+                <p className="body-copy mt-3">{item.summary}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="paper-section">
+        <p className="eyebrow">RIDE JOURNAL</p>
+        <h2 className="section-title">{result.ride_journal_prompt}</h2>
       </section>
     </main>
   );

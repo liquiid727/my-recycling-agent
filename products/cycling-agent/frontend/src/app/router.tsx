@@ -8,11 +8,13 @@ import { createBrowserRouter } from "react-router-dom";
 import HomePage from "../pages/HomePage";
 import AdminPage from "../pages/AdminPage";
 import PlanResultPage from "../pages/PlanResultPage";
+import PlannerPage from "../pages/PlannerPage";
 import RouteDetailPage from "../pages/RouteDetailPage";
 import SettingsPage from "../pages/SettingsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <HomePage /> },
+  { path: "/planner", element: <PlannerPage /> },
   { path: "/admin", element: <AdminPage /> },
   { path: "/plans/:requestNo", element: <PlanResultPage /> },
   { path: "/routes/:routeCode", element: <RouteDetailPage /> },

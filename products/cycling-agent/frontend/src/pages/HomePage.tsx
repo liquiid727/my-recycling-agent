@@ -1,387 +1,470 @@
-/*
- * CN: 首页规划页面，承载输入表单、流式阶段反馈、澄清提示和即时结果。
- * EN: Home planning page with query form, streaming stage feedback, clarification prompts, and inline results.
- */
+import { FormEvent, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
-import PlanResultView from "../components/PlanResultView";
-import ThemeToggle from "../components/ThemeToggle";
-import { usePlannerFlow } from "../features/planner/hooks";
-import { Link, useNavigate } from "react-router-dom";
+import { ErrorCard, LoadingCard } from "../components/EditorialStates";
+import { useCompanionPlan, useExperienceHome } from "../features/experience/hooks";
 
-const START_POINT_SUGGESTIONS = [
-  { name: "闻涛路滨江段", region: "滨江", hint: "钱塘江休闲往返" },
-  { name: "杨公堤南口", region: "西湖", hint: "西湖/龙井轻爬坡" },
-  { name: "湘湖游客中心", region: "湘湖", hint: "湘湖半日休闲" },
-  { name: "奥体印象城外广场", region: "滨江", hint: "滨江晨骑刷圈" },
-  { name: "余杭良渚文化村口", region: "余杭", hint: "余杭轻郊野" }
-];
+type TemplatePreset = {
+  titleLine: string;
+  summary: string;
+  tags: string[];
+};
 
-const REGION_OPTIONS = ["滨江", "西湖", "湘湖", "萧山", "余杭", "龙井"];
+const templatePresets: Record<string, TemplatePreset> = {
+  quiet: {
+    titleLine: "周六 16:30 · 梧桐树荫小环线",
+    summary: "先骑到公园北门，再绕湖半圈。中途在草坪边坐 10 分钟，回程经过面包店。",
+    tags: ["轻松", "有树荫", "适合拍一张照片"],
+  },
+  coffee: {
+    titleLine: "周日上午 10:20 · 河边拿铁停靠点",
+    summary: "骑到河岸慢车道后右转，停在咖啡窗口。喝完再沿小巷回家，整段不用赶时间。",
+    tags: ["咖啡", "慢车道", "适合独处"],
+  },
+  sunset: {
+    titleLine: "周日 17:10 · 橘色桥面慢行",
+    summary: "日落前到桥面，停 5 分钟看水面反光。回程穿过居民区，路短但很有周末感。",
+    tags: ["日落", "拍照", "短途"],
+  },
+};
+
+function RouteArt({ routeCode, sectionLabel }: { routeCode: string; sectionLabel: string }) {
+  let variant = "park";
+  const source = `${routeCode} ${sectionLabel}`.toLowerCase();
+  if (source.includes("river") || source.includes("coffee") || sectionLabel.includes("咖啡")) {
+    variant = "coffee";
+  } else if (source.includes("sunset") || source.includes("hill") || sectionLabel.includes("日落")) {
+    variant = "sunset";
+  }
+  return <div aria-hidden="true" className={`route-art ${variant}`} />;
+}
+
+function WeatherIcon() {
+  return (
+    <svg fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="5" />
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+    </svg>
+  );
+}
+
+function RideIcon() {
+  return (
+    <svg fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+      <path d="M4 17c4-8 12-8 16 0" />
+      <path d="M7 17h10" />
+      <path d="M12 5v5" />
+    </svg>
+  );
+}
+
+function JournalIcon() {
+  return (
+    <svg fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+      <path d="M5 18c4-2 10-2 14 0" />
+      <path d="M8 14c1-4 7-4 8 0" />
+      <path d="M12 6v6" />
+    </svg>
+  );
+}
+
+function SceneIllustration() {
+  return (
+    <div aria-label="日落时分，年轻程序员骑车穿过树荫城市公园的水彩手账风场景" className="scene">
+      <svg aria-label="水彩纸张、树荫、公园小路、落日与骑车的人" role="img" viewBox="0 0 900 620">
+        <defs>
+          <linearGradient id="pathTone" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stopColor="var(--surface)" stopOpacity=".7" />
+            <stop offset="1" stopColor="var(--accent)" stopOpacity=".18" />
+          </linearGradient>
+          <filter height="120%" id="watercolorPaper" width="120%" x="-10%" y="-10%">
+            <feTurbulence baseFrequency=".018 .045" numOctaves="3" result="grain" seed="7" type="fractalNoise" />
+            <feDisplacementMap in="SourceGraphic" in2="grain" scale="7" />
+          </filter>
+        </defs>
+        <g className="watercolor">
+          <circle cx="710" cy="112" fill="var(--accent)" opacity=".30" r="62" />
+          <path d="M0 420 C160 360 260 378 420 330 C580 284 705 322 900 260 L900 620 L0 620 Z" fill="var(--leaf-soft)" />
+          <path
+            d="M-20 570 C160 465 350 410 530 405 C660 404 770 446 920 520 L920 620 L-20 620 Z"
+            fill="url(#pathTone)"
+            stroke="var(--border)"
+            strokeWidth="2"
+          />
+        </g>
+        <g className="sketch-line" opacity=".34" strokeWidth="4">
+          <path d="M120 120 C150 210 130 280 98 355" />
+          <path d="M215 80 C250 195 248 295 220 390" />
+          <path d="M782 80 C740 202 742 300 772 382" />
+        </g>
+        <g fill="var(--leaf-soft)" stroke="var(--border)" strokeWidth="2">
+          <circle cx="107" cy="112" r="70" />
+          <circle cx="210" cy="86" r="78" />
+          <circle cx="782" cy="90" r="86" />
+          <circle cx="742" cy="168" r="60" />
+        </g>
+        <g className="sketch-line" opacity=".38" strokeWidth="2">
+          <path d="M70 456 C210 420 316 438 450 404 C590 368 724 388 842 336" />
+          <path d="M96 496 C244 452 378 436 520 440 C650 442 762 474 846 512" />
+          <path d="M148 167 C188 144 226 137 270 144" />
+          <path d="M706 194 C736 176 774 172 812 184" />
+        </g>
+        <g transform="translate(424 344)">
+          <circle cx="32" cy="92" fill="none" opacity=".62" r="44" stroke="var(--fg)" strokeWidth="6" />
+          <circle cx="162" cy="92" fill="none" opacity=".62" r="44" stroke="var(--fg)" strokeWidth="6" />
+          <path
+            d="M32 92 L80 38 L116 92 L78 92 L162 92 L122 40"
+            fill="none"
+            opacity=".66"
+            stroke="var(--fg)"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="6"
+          />
+          <path d="M82 38 C72 18 82 4 101 4 C121 5 127 22 119 40" fill="var(--accent)" opacity=".75" />
+          <path d="M101 4 L112 -26" stroke="var(--fg)" strokeLinecap="round" strokeWidth="6" />
+          <circle cx="115" cy="-35" fill="var(--surface)" r="17" stroke="var(--fg)" strokeWidth="4" />
+          <path d="M112 -18 C135 12 135 42 118 67" stroke="var(--fg)" strokeLinecap="round" strokeWidth="7" />
+          <path d="M100 20 L75 52" stroke="var(--fg)" strokeLinecap="round" strokeWidth="6" />
+        </g>
+      </svg>
+      <div className="scene-card">
+        <div className="weather-panel">
+          <div>
+            <p className="body-copy text-[13px]">今天 17:40 · 城市公园</p>
+            <strong className="block text-base text-ink">暖光、树影、路面干爽，适合慢慢骑。</strong>
+          </div>
+          <span className="weather-temp">24°</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
-  const navigate = useNavigate();
-  const {
-    clarificationPrompt,
-    error,
-    inputMode,
-    loading,
-    loadingLabel,
-    messages,
-    planningMode,
-    quickReplies,
-    query,
-    result,
-    setInputMode,
-    setPlanningMode,
-    setQuery,
-    setQueryFromQuickReply,
-    setStructuredField,
-    setTargetDate,
-    detectOriginLocation,
-    stageUpdates,
-    structuredConstraints,
-    submit,
-    targetDate
-  } = usePlannerFlow({
-    onSuccess: (plan) => navigate(`/plans/${plan.request_no}`)
-  });
+  const { content, loading, error } = useExperienceHome();
+  const { submitting, response, error: submitError, submit } = useCompanionPlan();
+  const [message, setMessage] = useState("");
+  const [lastSubmittedMessage, setLastSubmittedMessage] = useState<string | null>(null);
+  const [selectedTemplateIndex, setSelectedTemplateIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  function applyStartPointSuggestion(name: string, region: string) {
-    setStructuredField("start_point", name);
-    setStructuredField("origin_region", region);
+  const prompts = useMemo(() => response?.suggested_prompts ?? content?.companion_persona.quick_prompts ?? [], [response, content]);
+  const weekendTemplates = content?.weekend_plan_templates ?? [];
+  const selectedTemplate = weekendTemplates[selectedTemplateIndex] ?? weekendTemplates[0];
+  const selectedTemplatePreset = templatePresets[selectedTemplate?.slug ?? "quiet"] ?? {
+    titleLine: selectedTemplate?.title ?? "周末轻计划",
+    summary: selectedTemplate?.summary ?? "把路线、停靠点和记忆提示组合成一张轻计划。",
+    tags: selectedTemplate?.title ? [selectedTemplate.title] : [],
+  };
+
+  function focusCompanion() {
+    const companion = document.getElementById("companion");
+    if (!companion) {
+      return;
+    }
+    const targetTop = companion.getBoundingClientRect().top + window.pageYOffset - 72;
+    window.scrollTo({ top: targetTop, behavior: "smooth" });
+    window.setTimeout(() => inputRef.current?.focus(), 420);
   }
 
-  function toggleDestinationPreference(preference: string) {
-    const current = structuredConstraints.destination_preferences ?? [];
-    const next = current.includes(preference) ? current.filter((item) => item !== preference) : [...current, preference];
-    setStructuredField("destination_preferences", next);
+  function showWeekend() {
+    const weekend = document.getElementById("weekend-plan-panel");
+    if (!weekend) {
+      return;
+    }
+    const targetTop = weekend.getBoundingClientRect().top + window.pageYOffset - 140;
+    window.scrollTo({ top: targetTop, behavior: "smooth" });
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = message.trim();
+    if (!trimmed) {
+      return;
+    }
+    setLastSubmittedMessage(trimmed);
+    void submit(trimmed);
+  }
+
+  if (loading) {
+    return (
+      <main className="paper-shell">
+        <LoadingCard body="首页内容、今日建议和伙伴语气正在整理中。" title="正在翻开今天的骑行首页" />
+      </main>
+    );
+  }
+
+  if (error || !content) {
+    return (
+      <main className="paper-shell">
+        <ErrorCard body={error ?? "首页内容暂时不可用，请稍后再试。"} title="今天这页还没有准备好" />
+      </main>
+    );
   }
 
   return (
-    <main className="page-shell">
-      <ThemeToggle />
-      <section className="hero-panel">
-        <p className="eyebrow">AAA Ride Buddy</p>
-        <h1>AAA骑车帮帮</h1>
-        <p className="hero-copy">像和朋友聊天一样说出你想怎么骑。我会先帮你判断值不值得出发，再给轻松、可执行的路线选择。</p>
-        <div className="hero-stat-row" aria-label="规划输出内容">
-          <span>先给结论</span>
-          <span>轻松追问</span>
-          <span>路线与天气</span>
+    <>
+      <header className="topnav" data-od-id="topnav">
+        <div className="topnav-inner">
+          <span className="topnav-logo">Over Cycling 偶尔骑行</span>
+          <nav aria-label="主导航" className="topnav-nav">
+            <a href="#today">今日轻骑</a>
+            <a href="#routes">附近路线</a>
+            <a href="#companion">AI 伙伴</a>
+          </nav>
+          <button className="primary-button" onClick={focusCompanion} type="button">
+            问问骑行伙伴
+          </button>
         </div>
-        <p className="hero-link-row">
-          <Link to="/settings">打开偏好设置</Link>
-        </p>
-      </section>
+      </header>
 
-      <section className="planner-panel">
-        <form className="planner-form" onSubmit={submit}>
-          <div className="segmented-control" aria-label="MVP 阶段规划模式">
-            <button type="button" aria-pressed={planningMode === "route"} onClick={() => setPlanningMode("route")}>
-              今晚 / 下午骑一下
-            </button>
-            <button type="button" aria-pressed={planningMode === "nearby_trip"} onClick={() => setPlanningMode("nearby_trip")}>
-              周末骑行出行
-            </button>
-          </div>
-          <p className="planner-hint">{planningMode === "nearby_trip" ? "2 到 3 天游骑行计划" : "市区内即时骑行决策"}</p>
-
-          <div className="segmented-control" aria-label="规划输入方式">
-            <button type="button" aria-pressed={inputMode === "natural"} onClick={() => setInputMode("natural")}>
-              一句话描述
-            </button>
-            <button type="button" aria-pressed={inputMode === "structured"} onClick={() => setInputMode("structured")}>
-              表单规划
-            </button>
-          </div>
-
-          <section className="chat-panel" aria-label="骑行规划对话">
-            <div className="quick-reply-row" aria-label="快捷回复">
-              {(quickReplies.length > 0 ? quickReplies : ["今晚轻松骑", "现在出发", "不要爬坡", "骑 2 小时", "周末两天", "千岛湖"]).map((reply) => (
-                <button key={reply} type="button" className="quick-reply-chip" onClick={() => setQueryFromQuickReply(reply)}>
-                  {reply}
+      <main className="home-main" id="content">
+        <section className="home-section" data-od-id="hero">
+          <div className="paper-shell hero-layout">
+            <div>
+              <p className="eyebrow">{content.hero.eyebrow}</p>
+              <h1 className="display-title">{content.hero.title}</h1>
+              <p className="lead-copy mt-5">{content.hero.lead}</p>
+              <div className="hero-cta mt-7">
+                <button className="primary-button" onClick={focusCompanion} type="button">
+                  {content.hero.primary_cta}
                 </button>
-              ))}
-            </div>
-            <div className="chat-thread">
-              {messages.map((message) => (
-                <article key={message.id} className={`chat-message chat-message-${message.role}`}>
-                  <span>{message.role === "assistant" ? "AAA骑车帮帮" : "你"}</span>
-                  <p>{message.content}</p>
-                </article>
-              ))}
-              {loading ? (
-                <article className="chat-message chat-message-assistant">
-                  <span>AAA骑车帮帮</span>
-                  <p>{loadingLabel ?? (planningMode === "nearby_trip" ? "我正在整理周末出行方案，先给你结论。" : "我正在看天气和路线难度。")}</p>
-                </article>
-              ) : null}
-            </div>
-
-            {inputMode === "natural" ? (
-              <label className="field-label chat-composer" htmlFor="planner-query">
-                骑行需求
-                <textarea
-                  id="planner-query"
-                  className="planner-input"
-                  placeholder={
-                    clarificationPrompt
-                      ? planningMode === "nearby_trip"
-                        ? "直接回复：从杭州市区出发，骑两天，可以过夜"
-                        : "直接回复：从闻涛路滨江段出发，骑 2 小时，不要爬坡"
-                      : planningMode === "nearby_trip"
-                        ? "例如：周末想出去骑车，附近有什么推荐线路么"
-                        : "例如：我今天晚上想出去骑行一下"
-                  }
-                  rows={3}
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-              </label>
-            ) : null}
-          </section>
-
-          {inputMode === "structured" ? (
-            <div className="structured-grid structured-grid-followup">
-              <label className="field-label" htmlFor="target-date">
-                目标日期
-                <input id="target-date" type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} />
-              </label>
-              <label className="field-label" htmlFor="departure-time">
-                出发时间
-                <input
-                  id="departure-time"
-                  type="time"
-                  value={structuredConstraints.departure_time ?? ""}
-                  onChange={(event) => setStructuredField("departure_time", event.target.value)}
-                />
-              </label>
-              <label className="field-label field-label-wide" htmlFor="start-point">
-                准确出发地点
-                <input
-                  id="start-point"
-                  aria-label="准确出发地点"
-                  placeholder="输入路名、地标或骑行集合点，例如：闻涛路滨江段"
-                  value={structuredConstraints.start_point ?? ""}
-                  onChange={(event) => setStructuredField("start_point", event.target.value)}
-                />
-              </label>
-              <div className="field-label">
-                定位
-                <button type="button" className="secondary-button" onClick={detectOriginLocation}>
-                  使用当前位置
+                <button className="ghost-button" onClick={showWeekend} type="button">
+                  {content.hero.secondary_cta} <span aria-hidden="true">→</span>
                 </button>
               </div>
-              <label className="field-label" htmlFor="origin-region">
-                出发片区
-                <select
-                  id="origin-region"
-                  aria-label="出发片区"
-                  value={structuredConstraints.origin_region ?? "滨江"}
-                  onChange={(event) => setStructuredField("origin_region", event.target.value)}
-                >
-                  {REGION_OPTIONS.map((region) => (
-                    <option key={region} value={region}>
-                      {region}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="field-label field-label-wide">
-                地点关键字
-                <div className="suggestion-row" aria-label="常用出发地点">
-                  {START_POINT_SUGGESTIONS.map((item) => (
-                    <button
-                      key={item.name}
-                      type="button"
-                      className="suggestion-chip"
-                      aria-label={item.name}
-                      onClick={() => applyStartPointSuggestion(item.name, item.region)}
-                    >
-                      <span>{item.name}</span>
-                      <small>{item.hint}</small>
-                    </button>
-                  ))}
+            </div>
+            <SceneIllustration />
+          </div>
+        </section>
+
+        <section className="home-section" data-od-id="today" id="today">
+          <div className="paper-shell space-y-12">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="max-w-[42ch]">
+                <p className="eyebrow">TODAY&apos;S NUDGE</p>
+                <h2 className="section-title">把今天的出门理由写成一页手账。</h2>
+              </div>
+              <button className="secondary-button" type="button">
+                换一个今日建议
+              </button>
+            </div>
+            <div className="feature-grid">
+              <article className="paper-card feature-card">
+                <div aria-hidden="true" className="feature-mark">
+                  <WeatherIcon />
                 </div>
+                <h3 className="mb-1 text-[22px] font-semibold text-ink">天气便签</h3>
+                <p className="body-copy">{content.today_nudges[0]?.body ?? "傍晚微风，日落前 45 分钟最舒服。带一件薄外套，停在湖边看一会儿光。"}</p>
+              </article>
+              <article className="paper-card feature-card">
+                <div aria-hidden="true" className="feature-mark">
+                  <RideIcon />
+                </div>
+                <h3 className="mb-1 text-[22px] font-semibold text-ink">今日慢骑便条</h3>
+                <p className="body-copy">{content.today_nudges[1]?.body ?? content.today_nudges[0]?.body ?? "从公司附近出发，沿树荫路骑到河边咖啡窗口；不用赶路，听完一张专辑就回来。"}</p>
+              </article>
+              <article className="paper-card feature-card">
+                <div aria-hidden="true" className="feature-mark">
+                  <JournalIcon />
+                </div>
+                <h3 className="mb-1 text-[22px] font-semibold text-ink">心情边注</h3>
+                <p className="body-copy">{content.today_nudges[2]?.body ?? "如果你只是想离开屏幕十分钟，AI 伙伴会把路线缩短，优先推荐安静、绿多、有座位的地方。"}</p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section className="home-section" data-od-id="nearby-routes" id="routes">
+          <div className="paper-shell">
+            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="eyebrow">NEARBY ROUTES</p>
+                <h2 className="section-title">像翻一本城市自然手账一样找路线。</h2>
               </div>
-              <label className="field-label" htmlFor="available-hours">
-                可骑时长
-                <input
-                  id="available-hours"
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={structuredConstraints.available_hours ?? ""}
-                  onChange={(event) => setStructuredField("available_hours", event.target.value)}
-                />
-              </label>
-              <label className="field-label" htmlFor="target-distance">
-                目标距离
-                <input
-                  id="target-distance"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={structuredConstraints.target_distance_km ?? ""}
-                  onChange={(event) => setStructuredField("target_distance_km", event.target.value)}
-                />
-              </label>
-              {planningMode === "nearby_trip" ? (
-                <>
-                  <label className="field-label" htmlFor="duration-bucket">
-                    出行时长
-                    <select
-                      id="duration-bucket"
-                      value={structuredConstraints.duration_bucket ?? "two_day"}
-                      onChange={(event) => setStructuredField("duration_bucket", event.target.value)}
-                    >
-                      <option value="two_day">两天</option>
-                      <option value="three_day">三天</option>
-                      <option value="half_day">半天</option>
-                      <option value="one_day">一天</option>
-                    </select>
-                  </label>
-                  <label className="field-label" htmlFor="return-preference">
-                    返程偏好
-                    <select
-                      id="return-preference"
-                      value={structuredConstraints.return_preference ?? "ride_back"}
-                      onChange={(event) => setStructuredField("return_preference", event.target.value)}
-                    >
-                      <option value="ride_back">骑回</option>
-                      <option value="public_transport">公共交通返程</option>
-                      <option value="shorten_route">缩短路线</option>
-                    </select>
-                  </label>
-                  <label className="field-label" htmlFor="overnight-preference">
-                    过夜偏好
-                    <select
-                      id="overnight-preference"
-                      value={structuredConstraints.overnight_preference ?? "required"}
-                      onChange={(event) => setStructuredField("overnight_preference", event.target.value)}
-                    >
-                      <option value="required">接受过夜</option>
-                      <option value="optional">可过夜可不住</option>
-                      <option value="avoid">不想过夜</option>
-                    </select>
-                  </label>
-                  <label className="field-label" htmlFor="lodging-preference">
-                    住宿偏好
-                    <input
-                      id="lodging-preference"
-                      value={structuredConstraints.lodging_preference ?? ""}
-                      onChange={(event) => setStructuredField("lodging_preference", event.target.value)}
-                    />
-                  </label>
-                  <div className="field-label field-label-wide">
-                    目的地偏好
-                    <div className="suggestion-row" aria-label="目的地偏好">
-                      {["千岛湖", "湖州", "江边", "咖啡", "亲水", "湖区", "公园", "茶村", "轻爬坡", "轻郊游"].map((preference) => (
-                        <button
-                          key={preference}
-                          type="button"
-                          className="suggestion-chip"
-                          aria-pressed={(structuredConstraints.destination_preferences ?? []).includes(preference)}
-                          onClick={() => toggleDestinationPreference(preference)}
-                        >
-                          <span>{preference}</span>
-                        </button>
+              <div aria-label="路线分类" className="flex flex-wrap gap-2" role="list">
+                <span className="pill-tag">公园</span>
+                <span className="pill-tag">咖啡</span>
+                <span className="pill-tag">日落</span>
+                <span className="pill-tag">拍照</span>
+              </div>
+            </div>
+            <div className="route-grid">
+              {content.curated_routes.map((route) => (
+                <Link className="paper-card route-card block" key={route.route_code} to={`/routes/${route.route_code}`}>
+                  <RouteArt routeCode={route.route_code} sectionLabel={route.section_label} />
+                  <div>
+                    <p className="body-copy mb-2 text-[13px]">{route.section_label}</p>
+                    <h3 className="text-[22px] font-semibold text-ink">{route.title}</h3>
+                    <p className="body-copy mb-0 mt-3">{route.summary}</p>
+                    <div className="route-meta">
+                      {route.tags.map((tag) => (
+                        <span className="pill-tag" key={tag}>
+                          {tag}
+                        </span>
                       ))}
                     </div>
                   </div>
-                </>
-              ) : null}
-              <label className="field-label" htmlFor="fitness-level">
-                体力等级
-                <select
-                  id="fitness-level"
-                  value={structuredConstraints.fitness_level ?? "medium"}
-                  onChange={(event) => setStructuredField("fitness_level", event.target.value)}
-                >
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
-              </label>
-              <label className="field-label" htmlFor="ride-style">
-                骑行风格
-                <select
-                  id="ride-style"
-                  value={structuredConstraints.ride_style ?? "scenic_relaxed"}
-                  onChange={(event) => setStructuredField("ride_style", event.target.value)}
-                >
-                  <option value="scenic_relaxed">风景轻松</option>
-                  <option value="climb">轻爬坡</option>
-                  <option value="training_loop">刷圈训练</option>
-                  <option value="general">通用</option>
-                </select>
-              </label>
-              <label className="field-label" htmlFor="slope-tolerance">
-                爬坡接受度
-                <select
-                  id="slope-tolerance"
-                  value={structuredConstraints.slope_tolerance ?? "avoid"}
-                  onChange={(event) => setStructuredField("slope_tolerance", event.target.value)}
-                >
-                  <option value="avoid">avoid</option>
-                  <option value="neutral">neutral</option>
-                  <option value="prefer">prefer</option>
-                </select>
-              </label>
-              <label className="field-label" htmlFor="priority">
-                偏好重点
-                <input
-                  id="priority"
-                  value={structuredConstraints.priority ?? ""}
-                  onChange={(event) => setStructuredField("priority", event.target.value)}
-                />
-              </label>
+                </Link>
+              ))}
             </div>
-          ) : null}
-          <div className="planner-actions">
-            <button className="primary-button" type="submit" disabled={loading}>
-              {loading ? "规划中..." : inputMode === "natural" ? "发送" : "开始规划"}
-            </button>
-            <p className="planner-hint">直接补一句就行，我会记住前面聊过的内容。</p>
           </div>
-        </form>
-      </section>
+        </section>
 
-      <section className="result-grid">
-        {!loading && !error && !result ? (
-          <article className="state-panel">
-            <h2>待生成</h2>
-            <p>提交后会先返回本次是否建议出发，再展示路线、天气风险、补给、装备和周末住宿安排。</p>
-          </article>
-        ) : null}
+        <section className="home-section" data-od-id="ai-companion" id="companion">
+          <div className="paper-shell companion-layout">
+            <aside aria-label="AI 骑行伙伴角色卡" className="buddy-card">
+              <div>
+                <p className="eyebrow">AI COMPANION · FIELD NOTES</p>
+                <h2 className="section-title">{content.companion_persona.headline}</h2>
+                <p className="lead-copy mt-4">{content.companion_persona.description}</p>
+              </div>
+              <div aria-hidden="true" className="buddy-face" />
+              <p className="body-copy text-[14px]">伙伴语气：温柔、成熟、少催促。像旅行手账里的旁白，记录天气、停靠点和心情，不谈速度、卡路里或训练表现。</p>
+            </aside>
 
-        {loading ? (
-          <article className="state-panel">
-            <h2>{loadingLabel ?? "正在生成路线建议"}</h2>
-            <p>{planningMode === "nearby_trip" ? "系统正在匹配周末目的地、路线模板、住宿、装备、天气窗口、返程方案与风险。" : "系统正在解析需求、确认出发点、匹配市区路线，并计算天气与风险。"}</p>
-            {stageUpdates.length > 0 ? (
-              <ul className="stage-update-list">
-                {stageUpdates.map((stage, index) => (
-                  <li key={`${stage.stage_name}-${index}`}>
-                    <strong>{stage.stage_name}</strong>
-                    {" · "}
-                    {stage.summary}
-                  </li>
+            <div className="chat-card">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="body-copy text-[13px]">今天的对话</p>
+                  <h3 className="text-[22px] font-semibold text-ink">今天想把哪一页写进生活？</h3>
+                </div>
+                <span className="pill-tag">FRIEND MODE</span>
+              </div>
+
+              <div aria-live="polite" className="chat-log" id="chatLog">
+                <div className="bubble">我看了一下今天的天气，傍晚很适合去树多的地方。你想要咖啡、日落，还是安静公园？</div>
+                {lastSubmittedMessage ? <div className="bubble user">{lastSubmittedMessage}</div> : null}
+                {response ? <div className="bubble">{response.assistant_message}</div> : null}
+                {submitError ? <div className="bubble">{submitError}</div> : null}
+              </div>
+
+              <div aria-label="快捷提问" className="quick-prompts">
+                {prompts.map((prompt) => (
+                  <button key={prompt} onClick={() => setMessage(prompt)} type="button">
+                    {prompt}
+                  </button>
                 ))}
-              </ul>
-            ) : null}
-          </article>
-        ) : null}
+              </div>
 
-        {error ? (
-          <article className="state-panel state-error" role="alert">
-            <h2>请求失败</h2>
-            <p>{error}</p>
-          </article>
-        ) : null}
+              <form className="space-y-3" onSubmit={handleSubmit}>
+                <label className="block" htmlFor="chatInput">
+                  <span className="body-copy block text-[13px]">也可以直接告诉它你的心情</span>
+                </label>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                  <input
+                    aria-label="今天的对话输入"
+                    className="field-input flex-1"
+                    id="chatInput"
+                    placeholder="比如：今天脑子有点满，想去树多的地方骑一小圈。"
+                    ref={inputRef}
+                    type="text"
+                    value={message}
+                    onChange={(event) => setMessage(event.target.value)}
+                  />
+                  <button className="primary-button shrink-0" disabled={submitting} type="submit">
+                    {submitting ? "整理这一页中..." : "发送"}
+                  </button>
+                </div>
+              </form>
 
-        {result ? <PlanResultView result={result} /> : null}
-      </section>
-    </main>
+              {response?.featured_plan ? (
+                <div className="planner-result">
+                  <h3 className="text-[22px] font-semibold text-ink">{response.featured_plan.route_name}</h3>
+                  <p className="body-copy mt-3">{response.featured_plan.summary_reason}</p>
+                  <div className="route-meta">
+                    <span className="pill-tag">{response.featured_plan.distance_km} km</span>
+                    <span className="pill-tag">{response.featured_plan.estimated_duration_hours} h</span>
+                    <span className="pill-tag">{response.featured_plan.risk_level}</span>
+                  </div>
+                  {response.request_no ? (
+                    <div className="mt-4">
+                      <Link className="secondary-button" to={`/plans/${response.request_no}`}>
+                        查看完整结果
+                      </Link>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </section>
+
+        <section className="home-section" data-od-id="weekend-plans">
+          <div className="paper-shell weekend-layout">
+            <div>
+              <p className="eyebrow">WEEKEND PLAN</p>
+              <h2 className="section-title">三种周末，像贴进本子里的小计划。</h2>
+              <p className="lead-copy mt-4">选择你这个周末的状态，Over Cycling 会把路线、停靠点和记忆提示组合成一张轻计划：不追求效率，只留下值得记住的片段。</p>
+              <div className="hero-cta mt-7">
+                {weekendTemplates.map((item, index) => (
+                  <button className="secondary-button" key={item.slug} type="button" onClick={() => setSelectedTemplateIndex(index)}>
+                    {item.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="paper-card p-7" id="weekend-plan-panel">
+              <p className="body-copy text-[13px]">生成结果</p>
+              <div className="planner-result">
+                <h3 className="text-[22px] font-semibold text-ink">{selectedTemplatePreset.titleLine}</h3>
+                <p className="body-copy mt-3">{selectedTemplate?.summary ?? selectedTemplatePreset.summary}</p>
+                <div className="route-meta">
+                  {selectedTemplatePreset.tags.map((tag) => (
+                    <span className="pill-tag" key={tag}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="home-section" data-od-id="journal">
+          <div className="paper-shell">
+            <div className="mb-10 max-w-[42ch]">
+              <p className="eyebrow">CYCLING JOURNAL</p>
+              <h2 className="section-title">把骑行记成一页背包里的生活，而不是一组成绩。</h2>
+            </div>
+            <div className="journal-strip">
+              {content.journal_cards.map((item) => (
+                <article className="journal-card" key={`${item.label}-${item.title}`}>
+                  <span className="body-copy text-[13px]">{item.label}</span>
+                  <div>
+                    <h3 className="text-[22px] font-semibold text-ink">{item.title}</h3>
+                    <p className="body-copy mb-0 mt-3">
+                      {item.label === "今天看到" && "AI 伙伴会把这种小事存进记忆，而不是追问你骑得快不快。"}
+                      {item.label === "适合下次" && "系统会记住更舒服的时间段，下次直接提醒。"}
+                      {item.label === "停靠点" && "可收藏成“慢骑路线”的固定休息点。"}
+                      {item.label === "心情" && "用一句话收尾，形成更生活化的骑行回忆。"}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="home-section text-center" data-od-id="cta-strip">
+          <div className="paper-shell max-w-[640px]">
+            <div className="quote-mark">"</div>
+            <blockquote className="quote-block mx-auto">{content.cta_footer.quote}</blockquote>
+            <p className="lead-copy mx-auto mt-4 mb-8">{content.cta_footer.lead}</p>
+            <button className="primary-button" onClick={focusCompanion} type="button">
+              {content.cta_footer.button_label}
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <footer className="pagefoot" data-od-id="footer">
+        <div className="pagefoot-inner">
+          <span>© 2026 Over Cycling 偶尔骑行</span>
+          <span className="body-copy text-[13px]">生活方式骑行 · 公园 · 咖啡 · 日落 · 记忆</span>
+        </div>
+      </footer>
+    </>
   );
 }

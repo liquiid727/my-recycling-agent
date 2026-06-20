@@ -330,8 +330,8 @@ function DebugTracePanel({ toolTrace }: { toolTrace: RidePlanResponse["tool_trac
         <h3>服务调用细节</h3>
       </div>
       <ul className="detail-list">
-        {toolTrace.map((item) => (
-          <li key={`${item.stage_name}-${item.provider_name}`}>
+        {toolTrace.map((item, index) => (
+          <li key={`${item.stage_name}-${item.provider_name}-${index}`}>
             {item.stage_name}: {item.provider_name} / {item.status} / {item.summary}
           </li>
         ))}
