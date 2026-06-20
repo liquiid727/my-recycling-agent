@@ -29,6 +29,29 @@ LOCAL_APPROACH_SPEED_KMH = 16.0
 class LocalRouteProvider:
     provider_name = "local-route-stub"
 
+    def resolve_point(self, address: str, *, city_code: str) -> dict[str, Any]:
+        normalized_address = _normalize_local_address(address)
+        known = LOCAL_POINT_REGISTRY.get(normalized_address)
+        if known is None:
+            raise RuntimeError("local-route-provider-unknown-point")
+        return {
+            "name": normalized_address,
+            "longitude": known["longitude"],
+            "latitude": known["latitude"],
+            "region": known.get("region"),
+            "source": "local-registry",
+        }
+
+    def get_cycling_path(self, start_point: dict[str, Any], end_point: dict[str, Any]) -> dict[str, Any]:
+        if None in (
+            start_point.get("longitude"),
+            start_point.get("latitude"),
+            end_point.get("longitude"),
+            end_point.get("latitude"),
+        ):
+            raise RuntimeError("local-route-provider-missing-coordinate")
+        return _estimate_local_cycling_path(start_point, end_point)
+
     def get_route_context(self, route: dict[str, Any], constraints: dict[str, Any]) -> dict[str, Any]:
         origin_region = constraints.get("origin_region") or route.get("district_tags", ["杭州"])[0]
         distance_km = float(route.get("distance_km", 0))
@@ -86,10 +109,11 @@ class LocalRouteProvider:
 
     def _resolve_local_user_start_point(self, constraints: dict[str, Any], route: dict[str, Any]) -> dict[str, Any]:
         start_point = constraints.get("start_point") or route.get("start_point_name")
-        if start_point in LOCAL_POINT_REGISTRY:
-            known = LOCAL_POINT_REGISTRY[start_point]
+        normalized_start_point = _normalize_local_address(start_point)
+        if normalized_start_point in LOCAL_POINT_REGISTRY:
+            known = LOCAL_POINT_REGISTRY[normalized_start_point]
             return {
-                "name": start_point,
+                "name": normalized_start_point,
                 "longitude": known["longitude"],
                 "latitude": known["latitude"],
                 "region": known.get("region"),
@@ -128,6 +152,14 @@ def _haversine_km(start_lng: float, start_lat: float, end_lng: float, end_lat: f
     lat2 = radians(end_lat)
     a = sin(delta_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(delta_lng / 2) ** 2
     return 2 * radius_km * asin(sqrt(a))
+
+
+def _normalize_local_address(address: str | None) -> str:
+    text = (address or "").strip()
+    for suffix in ("附近", "周边"):
+        if text.endswith(suffix):
+            text = text[: -len(suffix)]
+    return text
 
 
 def _estimate_local_cycling_path(start_point: dict[str, Any], end_point: dict[str, Any]) -> dict[str, Any]:

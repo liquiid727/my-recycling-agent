@@ -305,6 +305,28 @@ def test_post_ride_plan_prefers_dynamic_nearby_route_candidates() -> None:
     assert any(item["stage_name"] == "nearby_route_discovery" and item["status"] == "success" for item in body["tool_trace"])
 
 
+def test_post_ride_plan_default_local_providers_generate_dynamic_route() -> None:
+    client = TestClient(create_app(weather_provider=StubWeatherProvider()))
+    response = client.post(
+        "/api/v1/ride/plan",
+        json={
+            "query": "我在沈塘桥，骑2小时，轻松点",
+            "target_date": "2026-06-06",
+            "planning_scene": "city_ride",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "success"
+    assert body["recommended_plan"]["route_code"].startswith("DYN-HANGZHOU-")
+    assert body["recommended_plan"]["route_name"].startswith("沈塘桥-")
+    assert body["route_map"]["provider_name"] == "dynamic-nearby-route"
+    assert body["route_map"]["polyline_available"] is True
+    assert "nearby-route-discovery-unavailable" not in body["fallback_reason"]
+    assert any(item["stage_name"] == "nearby_route_discovery" and item["status"] == "success" for item in body["tool_trace"])
+
+
 def test_post_ride_plan_does_not_promote_template_routes_when_dynamic_routes_are_empty() -> None:
     client = TestClient(
         create_app(

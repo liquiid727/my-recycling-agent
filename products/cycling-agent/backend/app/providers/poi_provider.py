@@ -4,9 +4,23 @@ EN: POI provider abstraction for local supply/bailout facts and AMap place-aroun
 
 from __future__ import annotations
 
+from math import asin, cos, radians, sin, sqrt
 from typing import Any, Callable
 
 import httpx
+
+
+LOCAL_ROUTE_ANCHORS: list[dict[str, Any]] = [
+    {"name": "运河亚运公园", "type": "公园", "address": "拱墅区", "longitude": 120.1450, "latitude": 30.3100, "district": "拱墅"},
+    {"name": "市民公园", "type": "公园", "address": "拱墅区", "longitude": 120.1560, "latitude": 30.2740, "district": "拱墅"},
+    {"name": "朝晖文化公园", "type": "公园", "address": "拱墅区", "longitude": 120.1650, "latitude": 30.2870, "district": "拱墅"},
+    {"name": "大兜路历史街区", "type": "景点", "address": "拱墅区", "longitude": 120.1510, "latitude": 30.3080, "district": "拱墅"},
+    {"name": "西湖文化广场", "type": "广场", "address": "拱墅区", "longitude": 120.1659, "latitude": 30.2798, "district": "拱墅"},
+    {"name": "钱塘江城市阳台", "type": "水系", "address": "上城区", "longitude": 120.2140, "latitude": 30.2410, "district": "上城"},
+    {"name": "闻涛路滨江段", "type": "绿道", "address": "滨江区", "longitude": 120.2103, "latitude": 30.2064, "district": "滨江"},
+    {"name": "湘湖游客中心", "type": "湖", "address": "萧山区", "longitude": 120.2525, "latitude": 30.1545, "district": "萧山"},
+]
+LOCAL_POI_RADIUS_KM = 12.0
 
 
 class LocalPoiProvider:
@@ -27,6 +41,22 @@ class LocalPoiProvider:
                 "fact_source": "template",
             },
         }
+
+    def search_route_anchors(
+        self,
+        *,
+        longitude: float,
+        latitude: float,
+        city_code: str,
+        ride_style: str | None = None,
+    ) -> list[dict[str, Any]]:
+        anchors = []
+        for anchor in LOCAL_ROUTE_ANCHORS:
+            distance_km = _haversine_km(longitude, latitude, float(anchor["longitude"]), float(anchor["latitude"]))
+            if distance_km > LOCAL_POI_RADIUS_KM:
+                continue
+            anchors.append({**anchor, "distance_km": round(distance_km, 2)})
+        return sorted(anchors, key=lambda item: (_local_anchor_rank(item, ride_style), -item["distance_km"]), reverse=True)
 
 
 class AMapPoiProvider:
@@ -149,6 +179,28 @@ def _normalize_poi_type(raw_type: str | None) -> str:
     if "医院" in raw_type or "医疗" in raw_type:
         return "医院"
     return raw_type.split(";")[0]
+
+
+def _local_anchor_rank(anchor: dict[str, Any], ride_style: str | None) -> int:
+    anchor_text = f"{anchor.get('name', '')}{anchor.get('type', '')}"
+    rank = 0
+    if any(token in anchor_text for token in ("公园", "绿道", "湖", "河", "运河", "水系")):
+        rank += 3
+    if any(token in anchor_text for token in ("景点", "广场")):
+        rank += 2
+    if ride_style == "scenic_relaxed" and any(token in anchor_text for token in ("公园", "绿道", "湖", "河")):
+        rank += 2
+    return rank
+
+
+def _haversine_km(start_lng: float, start_lat: float, end_lng: float, end_lat: float) -> float:
+    radius_km = 6371.0
+    delta_lat = radians(end_lat - start_lat)
+    delta_lng = radians(end_lng - start_lng)
+    lat1 = radians(start_lat)
+    lat2 = radians(end_lat)
+    a = sin(delta_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(delta_lng / 2) ** 2
+    return 2 * radius_km * asin(sqrt(a))
 
 
 def _normalize_anchor_type(raw_type: str | None) -> str:
