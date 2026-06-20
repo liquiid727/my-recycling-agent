@@ -121,9 +121,10 @@ uvicorn app.main:app --reload
 1. 启动后端前设置：
 
 ```bash
-CYCLING_AGENT_LLM_API_BASE_URL=你的兼容接口 \
+CYCLING_AGENT_LLM_API_BASE_URL=https://api.deepseek.com \
 CYCLING_AGENT_LLM_API_KEY=你的key \
-CYCLING_AGENT_LLM_MODEL=你的model \
+CYCLING_AGENT_LLM_MODEL=deepseek-v4-flash \
+CYCLING_AGENT_LLM_THINKING=disabled \
 uvicorn app.main:app --reload
 ```
 

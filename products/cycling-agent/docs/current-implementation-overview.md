@@ -194,7 +194,7 @@ mvp2 额外包含：
 - PostgreSQL: `docker-compose.dev.yml` 暴露 `54329`
 - Redis: `docker-compose.dev.yml` 暴露 `63799`
 - AMap: 配置 `CYCLING_AGENT_AMAP_WEB_API_KEY`
-- LLM: 配置 `CYCLING_AGENT_LLM_API_BASE_URL`, `CYCLING_AGENT_LLM_API_KEY`, `CYCLING_AGENT_LLM_MODEL`
+- LLM: 配置 `CYCLING_AGENT_LLM_API_BASE_URL`, `CYCLING_AGENT_LLM_API_KEY`, `CYCLING_AGENT_LLM_MODEL`；DeepSeek V4 建议额外配置 `CYCLING_AGENT_LLM_THINKING=disabled`
 
 ## 8. 测试与验证资产
 
