@@ -9,6 +9,7 @@
 ```text
 cycling-agent-docs/
   README.md
+  specs/current/
   docs/
     product/
     technical/
@@ -17,6 +18,15 @@ cycling-agent-docs/
 ```
 
 ## 说明
+
+### `specs/current/`
+
+当前已接受的产品事实基线，回答“今天这个骑行 agent 已经稳定成立了什么”：
+
+- `project-context.md`
+- `architecture-context.md`
+- `domain-context.md`
+- `agent-asset-map.md`
 
 ### `docs/product/`
 

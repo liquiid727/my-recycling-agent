@@ -18,7 +18,7 @@ REDIS_URL ?= redis://127.0.0.1:63799/0
 
 .PHONY: help all install backend-install frontend-install dev backend-dev frontend-dev \
 	backend-test frontend-test frontend-build test build infra-up infra-down \
-	storage-test amap-test llm-test clean
+	storage-test amap-test llm-test spec-check asset-check clean
 
 help:
 	@printf "Cycling Agent local commands\n\n"
@@ -34,6 +34,8 @@ help:
 	@printf "  make storage-test    Run PostgreSQL/Redis live storage test\n"
 	@printf "  make amap-test       Run AMap live integration test, requires CYCLING_AGENT_AMAP_WEB_API_KEY\n"
 	@printf "  make llm-test        Run LLM live integration test, requires LLM env vars\n"
+	@printf "  make spec-check      Run repository spec and workflow checks\n"
+	@printf "  make asset-check     Run cycling-agent asset baseline checks\n"
 
 all: install test build
 
@@ -88,6 +90,14 @@ amap-test:
 
 llm-test:
 	$(LOAD_ENV) cd $(BACKEND_DIR) && $(PYTHON) -m pytest tests/test_llm_live_integration.py -v
+
+spec-check:
+	node --test scripts/checks/spec-driven-request-lifecycle.test.mjs
+	node scripts/checks/validate-spec-driven-lifecycle.mjs
+
+asset-check:
+	node --test scripts/checks/cycling-agent-assets.test.mjs
+	node scripts/checks/validate-cycling-agent-assets.mjs
 
 clean:
 	rm -rf $(FRONTEND_DIR)/dist

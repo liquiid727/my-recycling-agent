@@ -1,0 +1,72 @@
+{
+  "assetMapVersion": "2026-06-17",
+  "product": "cycling-agent",
+  "layers": [
+    {
+      "id": "domain_map",
+      "status": "partial",
+      "accepted": [
+        "specs/current/project-context.md",
+        "specs/current/architecture-context.md",
+        "specs/current/domain-context.md"
+      ],
+      "supporting": [
+        "docs/technical/03-technical-architecture.md",
+        "docs/technical/04-technical-spec.md",
+        "products/cycling-agent/docs/current-implementation-overview.md"
+      ],
+      "exploratory": [
+        "docs/design/03-domain-model.md",
+        "docs/design/04-decision-tree.md"
+      ]
+    },
+    {
+      "id": "rule_library",
+      "status": "partial",
+      "accepted": [
+        ".rules/project.md",
+        ".rules/rule-map.yaml",
+        ".agents/manifest.yaml",
+        "rules/backend/go-backend-governance.md",
+        "rules/shared/error-code-governance.md"
+      ],
+      "runtimeRuleSurfaces": [
+        "products/cycling-agent/backend/app/agents/query_parser_agent.py",
+        "products/cycling-agent/backend/app/services/risk_scoring_service.py",
+        "products/cycling-agent/backend/app/services/city_strategy_service.py",
+        "products/cycling-agent/backend/app/services/ride_planning_orchestrator.py"
+      ]
+    },
+    {
+      "id": "knowledge_base",
+      "status": "partial",
+      "accepted": [
+        "products/cycling-agent/data/hangzhou_routes.json",
+        "products/cycling-agent/data/hangzhou_nearby_destinations.json",
+        "products/cycling-agent/data/hangzhou_trip_templates.json"
+      ],
+      "consumers": [
+        "products/cycling-agent/backend/app/repositories/route_template_repository.py",
+        "products/cycling-agent/backend/app/repositories/nearby_trip_repository.py",
+        "products/cycling-agent/backend/app/services/ride_planning_orchestrator.py"
+      ]
+    },
+    {
+      "id": "golden_dataset",
+      "status": "baseline_added",
+      "accepted": [
+        "tests/plans/cycling-agent-mvp.test-plan.json",
+        "tests/scenarios/cycling-agent-golden-dataset.yaml",
+        "tests/results/cycling-agent-mvp.scenario-result.example.json"
+      ],
+      "evidenceSources": [
+        "products/cycling-agent/backend/tests/test_query_parser_agent.py",
+        "products/cycling-agent/backend/tests/test_ride_plan_api.py",
+        "products/cycling-agent/backend/tests/test_chat_turn_api.py",
+        "products/cycling-agent/backend/tests/test_nearby_trip_api.py",
+        "products/cycling-agent/backend/tests/test_provider_fallback_api.py",
+        "products/cycling-agent/docs/manual-test-script.md"
+      ]
+    }
+  ]
+}

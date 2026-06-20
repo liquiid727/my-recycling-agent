@@ -1,6 +1,7 @@
 # Agents
 
-This directory defines local agent routing, role contracts, and scoped skill loading for SpecOS.
+This directory defines local agent routing, role contracts, and scoped skill
+loading for the cycling-agent repository.
 
 ## How To Use
 

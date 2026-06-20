@@ -2,8 +2,8 @@
 # EN: Project configuration file declaring executable tool, workflow, runtime, or build conventions.
 
 version: 1
-project: specos-ai
-purpose: Spec-driven AI IDE orchestration
+project: cycling-agent-docs
+purpose: Spec-driven delivery and runtime governance for the cycling-agent product
 
 defaults:
   language: zh-CN
@@ -154,12 +154,12 @@ roles:
       - name: specos-ui-design
         path: .codex/skills/specos-ui-design/SKILL.md
         required: false
-        purpose: SpecOS-specific UI design flow for spec-web-ui layouts, states, and handoff notes.
+        purpose: Spec-driven UI design flow for repository-managed frontend layouts, states, and handoff notes.
     context_includes:
       - .rules/project.md
       - rules/frontend/react-workbench-delivery.md
       - rules/ui/pencil-prototype-ui.md
-      - spec-web-ui/
+      - products/cycling-agent/frontend/
       - spec-draft/
       - specs/current/
       - specs/changes/
@@ -427,7 +427,7 @@ roles:
       - .rules/project.md
       - rules/frontend/react-workbench-delivery.md
       - tests/README.md
-      - spec-web-ui/
+      - products/cycling-agent/frontend/
       - specs/current/
       - specs/changes/
     owns:

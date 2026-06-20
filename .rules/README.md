@@ -1,6 +1,7 @@
 # Rule Index
 
-`.rules/` is the compact agent-facing rule entrypoint for SpecOS. Canonical detailed rule documents remain under `rules/`.
+`.rules/` is the compact agent-facing rule entrypoint for this cycling-agent
+repository. Canonical detailed rule documents remain under `rules/`.
 
 ## Files
 

@@ -2,7 +2,7 @@
 # EN: Project configuration file declaring executable tool, workflow, runtime, or build conventions.
 
 version: 1
-project: specos-ai
+project: cycling-agent-docs
 
 default_entrypoint:
   - .rules/project.md

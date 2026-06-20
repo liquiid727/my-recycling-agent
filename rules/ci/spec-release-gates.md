@@ -10,6 +10,10 @@ Define release checks that ensure generated artifacts still match accepted spec 
 - Failing scenario tests must block release for affected flows.
 - Reviewers should see which spec bundle version a release references.
 - Human approval is required before irreversible workflow steps in V1.
+- Repository-owned gates should verify the cycling-agent asset baseline before a
+  release candidate is treated as aligned. At minimum this includes:
+  `specs/current/`, `.rules/`, `.agents/manifest.yaml`, `tests/plans/`,
+  `tests/scenarios/`, and `tests/results/`.
 
 ## Draft Injection Hints
 

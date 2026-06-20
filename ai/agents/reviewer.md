@@ -1,6 +1,7 @@
 # Reviewer
 
-Owns review pass decisions for SpecOS changes, focusing on traceability, correctness, risk, and validation sufficiency.
+Owns review pass decisions for cycling-agent repository changes, focusing on
+traceability, correctness, risk, and validation sufficiency.
 
 ## Responsibilities
 

@@ -1,0 +1,201 @@
+{
+  "runId": "run-cycling-agent-mvp-example-001",
+  "specId": "cycling-agent-mvp",
+  "specVersion": "2026-06-16",
+  "featureName": "城市骑行与周末骑行出行决策",
+  "status": "pass",
+  "releaseDecision": "warning",
+  "startedAt": "2026-06-16T10:00:00Z",
+  "endedAt": "2026-06-16T10:03:00Z",
+  "summary": "核心市区骑行与周末出行场景通过，provider fallback 场景仍依赖手工或stub验证。",
+  "flowResults": [
+    {
+      "name": "市区即时骑行澄清与规划",
+      "status": "pass",
+      "stages": [
+        {
+          "name": "输入骑行需求",
+          "status": "pass",
+          "scenarios": [
+            {
+              "name": "模糊夜骑请求先澄清再规划",
+              "status": "pass",
+              "relatedEndpointTargets": [
+                "POST /api/v1/ride/plan/preflight",
+                "POST /api/v1/ride/plan"
+              ],
+              "steps": [
+                {
+                  "name": "提交自然语言请求",
+                  "status": "pass"
+                }
+              ]
+            }
+          ],
+          "endpoints": [
+            {
+              "target": "POST /api/v1/ride/plan/preflight",
+              "name": "骑行规划预检",
+              "method": "POST",
+              "path": "/api/v1/ride/plan/preflight",
+              "status": "pass"
+            }
+          ]
+        },
+        {
+          "name": "生成决策结果",
+          "status": "pass",
+          "scenarios": [
+            {
+              "name": "明确夜骑请求直接生成结果",
+              "status": "pass",
+              "relatedEndpointTargets": [
+                "POST /api/v1/ride/plan"
+              ],
+              "steps": [
+                {
+                  "name": "返回决策总结与路线结果",
+                  "status": "pass"
+                }
+              ]
+            }
+          ],
+          "endpoints": [
+            {
+              "target": "POST /api/v1/ride/plan",
+              "name": "骑行规划",
+              "method": "POST",
+              "path": "/api/v1/ride/plan",
+              "status": "pass"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "周末骑行出行澄清与规划",
+      "status": "pass",
+      "stages": [
+        {
+          "name": "生成周边游结果",
+          "status": "pass",
+          "scenarios": [
+            {
+              "name": "千岛湖两天计划直接生成结果",
+              "status": "pass",
+              "relatedEndpointTargets": [
+                "POST /api/v1/ride/plan"
+              ],
+              "steps": [
+                {
+                  "name": "返回主方案备选方案与节奏安排",
+                  "status": "pass"
+                }
+              ]
+            }
+          ],
+          "endpoints": [
+            {
+              "target": "POST /api/v1/ride/plan",
+              "name": "骑行规划",
+              "method": "POST",
+              "path": "/api/v1/ride/plan",
+              "status": "pass"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "降级与可解释性",
+      "status": "warning",
+      "stages": [
+        {
+          "name": "外部依赖降级",
+          "status": "warning",
+          "scenarios": [
+            {
+              "name": "天气服务降级仍返回结果",
+              "status": "warning",
+              "relatedEndpointTargets": [
+                "POST /api/v1/ride/plan"
+              ],
+              "steps": [
+                {
+                  "name": "触发provider fallback",
+                  "status": "warning"
+                }
+              ]
+            }
+          ],
+          "endpoints": [
+            {
+              "target": "POST /api/v1/ride/plan",
+              "name": "骑行规划",
+              "method": "POST",
+              "path": "/api/v1/ride/plan",
+              "status": "warning"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "items": [
+    {
+      "testType": "api",
+      "target": "POST /api/v1/ride/plan/preflight",
+      "flowName": "市区即时骑行澄清与规划",
+      "stageName": "输入骑行需求",
+      "scenarioName": "模糊夜骑请求先澄清再规划",
+      "branchType": "clarification",
+      "stepName": "提交自然语言请求",
+      "relatedEndpointTargets": [
+        "POST /api/v1/ride/plan/preflight"
+      ],
+      "status": "pass",
+      "durationMs": 42,
+      "summary": "模糊夜骑输入正确返回出发点与时长澄清。",
+      "evidence": [
+        "products/cycling-agent/backend/tests/test_ride_plan_api.py",
+        "products/cycling-agent/backend/tests/test_query_parser_agent.py"
+      ]
+    },
+    {
+      "testType": "api",
+      "target": "POST /api/v1/ride/plan",
+      "flowName": "周末骑行出行澄清与规划",
+      "stageName": "生成周边游结果",
+      "scenarioName": "千岛湖两天计划直接生成结果",
+      "branchType": "happy",
+      "stepName": "返回主方案备选方案与节奏安排",
+      "relatedEndpointTargets": [
+        "POST /api/v1/ride/plan"
+      ],
+      "status": "pass",
+      "durationMs": 87,
+      "summary": "两日周末出行返回了住宿、装备和天气窗口信息。",
+      "evidence": [
+        "products/cycling-agent/backend/tests/test_nearby_trip_api.py"
+      ]
+    },
+    {
+      "testType": "manual",
+      "target": "provider-fallback",
+      "flowName": "降级与可解释性",
+      "stageName": "外部依赖降级",
+      "scenarioName": "天气服务降级仍返回结果",
+      "branchType": "fallback",
+      "stepName": "触发provider fallback",
+      "relatedEndpointTargets": [
+        "POST /api/v1/ride/plan"
+      ],
+      "status": "warning",
+      "durationMs": 0,
+      "summary": "fallback 语义已定义，但是否通过真实外部依赖故障触发仍需按手工脚本确认。",
+      "evidence": [
+        "products/cycling-agent/docs/manual-test-script.md"
+      ]
+    }
+  ]
+}

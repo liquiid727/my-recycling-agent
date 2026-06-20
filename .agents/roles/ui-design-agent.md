@@ -2,7 +2,9 @@
 
 ## Mission
 
-Design and refine SpecOS user-facing interfaces so screens, states, copy hierarchy, and component decisions remain traceable to specs, drafts, and UI rules.
+Design and refine cycling-agent user-facing interfaces so screens, states, copy
+hierarchy, and component decisions remain traceable to specs, drafts, and UI
+rules.
 
 ## Required Inputs
 
@@ -10,7 +12,8 @@ Design and refine SpecOS user-facing interfaces so screens, states, copy hierarc
 - `rules/frontend/react-workbench-delivery.md`.
 - `rules/ui/pencil-prototype-ui.md` when work starts from a prototype or visual handoff.
 - Role-bound skills declared in `.agents/manifest.yaml` when the task touches agent settings, skill configuration, policy editors, switchboards, tables, or dangerous operations.
-- Existing `spec-web-ui/` routes, components, tests, and catalog assets.
+- Existing `products/cycling-agent/frontend/` routes, components, tests, and
+  related UI assets.
 
 ## Required Outputs
 

@@ -1,0 +1,213 @@
+{
+  "specId": "cycling-agent-mvp",
+  "specVersion": "2026-06-16",
+  "featureName": "城市骑行与周末骑行出行决策",
+  "source": "accepted-spec",
+  "flows": [
+    {
+      "name": "市区即时骑行澄清与规划",
+      "stages": [
+        {
+          "name": "输入骑行需求",
+          "scenarioNames": [
+            "模糊夜骑请求先澄清再规划",
+            "明确夜骑请求直接生成结果",
+            "高强度但轻松诉求导致无匹配"
+          ],
+          "stepNames": [
+            "提交自然语言请求"
+          ]
+        },
+        {
+          "name": "补齐关键约束",
+          "scenarioNames": [
+            "模糊夜骑请求先澄清再规划"
+          ],
+          "stepNames": [
+            "补充出发点与时长"
+          ]
+        },
+        {
+          "name": "生成决策结果",
+          "scenarioNames": [
+            "模糊夜骑请求先澄清再规划",
+            "明确夜骑请求直接生成结果",
+            "高强度但轻松诉求导致无匹配"
+          ],
+          "stepNames": [
+            "返回决策总结与路线结果"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "周末骑行出行澄清与规划",
+      "stages": [
+        {
+          "name": "输入周末出行需求",
+          "scenarioNames": [
+            "模糊周末出行请求先澄清",
+            "千岛湖两天计划直接生成结果"
+          ],
+          "stepNames": [
+            "提交周末自然语言请求"
+          ]
+        },
+        {
+          "name": "补齐出行条件",
+          "scenarioNames": [
+            "模糊周末出行请求先澄清"
+          ],
+          "stepNames": [
+            "补充出发点天数与过夜偏好"
+          ]
+        },
+        {
+          "name": "生成周边游结果",
+          "scenarioNames": [
+            "模糊周末出行请求先澄清",
+            "千岛湖两天计划直接生成结果"
+          ],
+          "stepNames": [
+            "返回主方案备选方案与节奏安排"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "降级与可解释性",
+      "stages": [
+        {
+          "name": "外部依赖降级",
+          "scenarioNames": [
+            "天气服务降级仍返回结果",
+            "路线与POI增强降级仍返回结果"
+          ],
+          "stepNames": [
+            "触发provider fallback"
+          ]
+        },
+        {
+          "name": "输出轨迹与风险解释",
+          "scenarioNames": [
+            "天气服务降级仍返回结果",
+            "路线与POI增强降级仍返回结果"
+          ],
+          "stepNames": [
+            "检查fallback_reason与tool_trace"
+          ]
+        }
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "name": "骑行规划预检",
+      "method": "POST",
+      "path": "/api/v1/ride/plan/preflight",
+      "priority": "P0",
+      "branches": ["happy", "clarification", "error"],
+      "preconditions": ["后端服务可用", "请求包含query和target_date"],
+      "expectedResults": ["缺失关键约束时返回ready_to_plan=false", "返回稳定missing_core_fields和clarification_prompt"],
+      "relatedRule": "cycling.plan.preflight"
+    },
+    {
+      "name": "骑行规划",
+      "method": "POST",
+      "path": "/api/v1/ride/plan",
+      "priority": "P0",
+      "branches": ["happy", "clarification", "fallback", "no_match", "error"],
+      "preconditions": ["后端服务可用", "目标日期存在"],
+      "expectedResults": ["市区场景返回decision_summary和推荐路线", "周末场景返回recommended_trip与trip_rhythm", "降级时返回fallback_reason和tool_trace"],
+      "relatedRule": "cycling.plan.create"
+    },
+    {
+      "name": "骑行对话补槽",
+      "method": "POST",
+      "path": "/api/v1/ride/chat/turn",
+      "priority": "P0",
+      "branches": ["happy", "clarification", "fallback", "error"],
+      "preconditions": ["messages至少包含一条用户输入", "planning_scene和target_date有效"],
+      "expectedResults": ["缺槽时返回assistant_message与missing_slots", "补齐后返回planner_request"],
+      "relatedRule": "cycling.chat.turn"
+    },
+    {
+      "name": "路线详情",
+      "method": "GET",
+      "path": "/api/v1/routes/{route_code}",
+      "priority": "P1",
+      "branches": ["happy", "error", "edge"],
+      "preconditions": ["route_code存在或不存在"],
+      "expectedResults": ["存在时返回补给点撤退方案和时间窗", "不存在时返回稳定错误"],
+      "relatedRule": "cycling.route.detail"
+    },
+    {
+      "name": "规划审计查询",
+      "method": "GET",
+      "path": "/api/v1/admin/planning-audit/{request_no}",
+      "priority": "P1",
+      "branches": ["happy", "error", "edge"],
+      "preconditions": ["request_no存在或不存在"],
+      "expectedResults": ["成功时同时返回ride_request weather_snapshot risk_assessments和decision_result", "不存在时返回稳定错误"],
+      "relatedRule": "cycling.audit.read"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "模糊夜骑请求先澄清再规划",
+      "priority": "P0",
+      "branches": ["clarification", "happy", "flow"],
+      "preconditions": ["默认城市为hangzhou", "后端服务可用"],
+      "expectedResults": ["第一次输入返回出发点与时长澄清", "补槽后返回city_ride结果", "结果包含decision_summary和至少一条推荐路线"],
+      "steps": ["提交自然语言请求", "补充出发点与时长", "返回决策总结与路线结果"]
+    },
+    {
+      "name": "明确夜骑请求直接生成结果",
+      "priority": "P0",
+      "branches": ["happy", "flow"],
+      "preconditions": ["后端服务可用", "请求包含明确出发点与时长"],
+      "expectedResults": ["无需额外澄清", "返回recommended_plan alternatives weather_snapshot decision_summary和roadbook"],
+      "steps": ["提交自然语言请求", "返回决策总结与路线结果"]
+    },
+    {
+      "name": "高强度但轻松诉求导致无匹配",
+      "priority": "P1",
+      "branches": ["no_match", "edge"],
+      "preconditions": ["后端服务可用"],
+      "expectedResults": ["系统不强推默认路线", "返回no_match_reason并保留可解释输出"],
+      "steps": ["提交自然语言请求", "返回决策总结与路线结果"]
+    },
+    {
+      "name": "模糊周末出行请求先澄清",
+      "priority": "P0",
+      "branches": ["clarification", "happy", "flow"],
+      "preconditions": ["后端服务可用"],
+      "expectedResults": ["第一次输入返回出发点天数与过夜偏好澄清", "补槽后返回weekend_trip结果"],
+      "steps": ["提交周末自然语言请求", "补充出发点天数与过夜偏好", "返回主方案备选方案与节奏安排"]
+    },
+    {
+      "name": "千岛湖两天计划直接生成结果",
+      "priority": "P0",
+      "branches": ["happy", "flow"],
+      "preconditions": ["后端服务可用", "trip template包含千岛湖两日方案"],
+      "expectedResults": ["返回recommended_trip.duration_bucket=two_day", "返回lodging_plan equipment_advice weather_window_notes和decision_summary"],
+      "steps": ["提交周末自然语言请求", "返回主方案备选方案与节奏安排"]
+    },
+    {
+      "name": "天气服务降级仍返回结果",
+      "priority": "P1",
+      "branches": ["fallback", "happy"],
+      "preconditions": ["天气provider不可用或被stub为失败"],
+      "expectedResults": ["返回weather_snapshot", "fallback_reason包含天气降级信息", "仍有决策结果"],
+      "steps": ["触发provider fallback", "检查fallback_reason与tool_trace"]
+    },
+    {
+      "name": "路线与POI增强降级仍返回结果",
+      "priority": "P1",
+      "branches": ["fallback", "happy"],
+      "preconditions": ["route或poi provider增强不可用"],
+      "expectedResults": ["返回tool_trace中的route_provider或poi_provider fallback", "仍有主结果与解释信息"],
+      "steps": ["触发provider fallback", "检查fallback_reason与tool_trace"]
+    }
+  ]
+}

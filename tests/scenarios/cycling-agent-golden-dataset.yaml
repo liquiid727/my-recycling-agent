@@ -1,0 +1,170 @@
+dataset_id: cycling-agent-golden-v1
+spec_id: cycling-agent-mvp
+spec_version: "2026-06-16"
+description: >
+  Stable golden cases for the current Hangzhou-first cycling-agent baseline.
+  These cases focus on clarification, successful planning, no-match behavior,
+  and provider fallback semantics.
+
+cases:
+  - case_id: city-clarify-evening-vague
+    planning_scene: city_ride
+    request:
+      endpoint: /api/v1/ride/plan/preflight
+      method: POST
+      payload:
+        query: 我今天晚上想出去骑行一下
+        target_date: "2026-06-21"
+    expected:
+      ready_to_plan: false
+      parsed_constraints:
+        planning_scene: city_ride
+        duration_bucket: evening
+      missing_core_fields:
+        includes:
+          - start_point
+          - available_hours_or_target_distance_km
+      clarification_prompt_contains:
+        - 出发
+        - 多久
+
+  - case_id: city-success-binjing-evening
+    planning_scene: city_ride
+    request:
+      endpoint: /api/v1/ride/plan
+      method: POST
+      payload:
+        query: 今晚从闻涛路滨江段出发骑2小时，不要爬坡
+        target_date: "2026-06-21"
+    expected:
+      status: success
+      planning_mode: route
+      parsed_constraints:
+        planning_scene: city_ride
+        start_point: 闻涛路滨江段
+        available_hours: 2
+        slope_tolerance: avoid
+      decision_summary:
+        scene: city_ride
+        go_decision_in:
+          - go
+          - caution
+      recommended_plan:
+        route_code_prefix: DYN-HANGZHOU-
+      alternatives:
+        min_items: 1
+      tool_trace:
+        includes_stage_names:
+          - query_parser
+          - weather_provider
+          - decision_engine
+
+  - case_id: city-no-match-overconstrained
+    planning_scene: city_ride
+    request:
+      endpoint: /api/v1/ride/plan
+      method: POST
+      payload:
+        query: 周六从滨江出发骑12小时，不想太累，最好风景好一点
+        target_date: "2026-06-21"
+    expected:
+      status: success
+      planning_mode: route
+      no_match_reason_present: true
+      recommended_plan:
+        go_decision: no_go
+
+  - case_id: weekend-clarify-vague
+    planning_scene: weekend_trip
+    request:
+      endpoint: /api/v1/ride/plan/preflight
+      method: POST
+      payload:
+        planning_mode: nearby_trip
+        query: 周末想出去骑车，附近有什么推荐线路么
+        target_date: "2026-06-21"
+    expected:
+      ready_to_plan: false
+      parsed_constraints:
+        planning_scene: weekend_trip
+      missing_core_fields:
+        includes:
+          - start_point
+          - duration_bucket
+          - overnight_preference
+
+  - case_id: weekend-success-qiandaohu-two-day
+    planning_scene: weekend_trip
+    request:
+      endpoint: /api/v1/ride/plan
+      method: POST
+      payload:
+        planning_mode: nearby_trip
+        planning_scene: weekend_trip
+        input_mode: structured
+        query: 这周末想去千岛湖骑两天
+        target_date: "2026-06-21"
+        structured_constraints:
+          origin_region: 滨江
+          start_point: 闻涛路滨江段
+          fitness_level: medium
+          ride_style: scenic_relaxed
+          slope_tolerance: neutral
+          duration_bucket: two_day
+          destination_preferences:
+            - 千岛湖
+          return_preference: public_transport
+          overnight_preference: required
+          lodging_preference: 湖边酒店
+          cross_city_allowed: true
+    expected:
+      status: success
+      planning_mode: nearby_trip
+      parsed_constraints:
+        planning_scene: weekend_trip
+      decision_summary:
+        scene: weekend_trip
+      recommended_trip:
+        destination_name: 千岛湖周边骑行停留区
+        duration_bucket: two_day
+        itinerary_days_min: 2
+        lodging_plan_present: true
+        equipment_advice_min_items: 1
+        weather_window_notes_present: true
+
+  - case_id: provider-fallback-weather
+    planning_scene: city_ride
+    request:
+      endpoint: /api/v1/ride/plan
+      method: POST
+      setup_hint: inject failing weather provider stub
+      payload:
+        query: 今晚从闻涛路滨江段出发骑2小时，不要爬坡
+        target_date: "2026-06-21"
+    expected:
+      status: success
+      fallback_reason_min_items: 1
+      weather_snapshot_present: true
+      tool_trace:
+        stage_name_status_pairs:
+          - stage_name: weather_provider
+            status_in:
+              - fallback
+              - success
+
+  - case_id: provider-fallback-route-poi
+    planning_scene: city_ride
+    request:
+      endpoint: /api/v1/ride/plan
+      method: POST
+      setup_hint: force route_provider and poi_provider fallback path
+      payload:
+        query: 今晚从闻涛路滨江段出发骑2小时，不要爬坡
+        target_date: "2026-06-21"
+    expected:
+      status: success
+      tool_trace:
+        includes_stage_names:
+          - route_provider
+          - poi_provider
+      decision_summary_present: true

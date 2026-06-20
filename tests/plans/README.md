@@ -13,3 +13,6 @@ Each plan should define:
 - scenario list with steps, branches, preconditions, and expected results
 
 `test-plan` is the semantic bridge between spec bundles and concrete execution assets such as Bruno collections or scenario scripts.
+
+The primary baseline example in this repository should describe the
+cycling-agent MVP, not an unrelated placeholder business flow.
