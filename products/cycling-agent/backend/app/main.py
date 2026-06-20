@@ -94,6 +94,7 @@ def _build_llm_provider(settings: Settings):
             base_url=settings.llm_api_base_url,
             api_key=settings.llm_api_key,
             model=settings.llm_model,
+            thinking=settings.llm_thinking,
             timeout_seconds=settings.llm_timeout_seconds,
         )
     return None

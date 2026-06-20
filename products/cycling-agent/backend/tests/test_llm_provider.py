@@ -68,3 +68,44 @@ def test_llm_provider_normalizes_nested_parser_payload() -> None:
         "missing_fields": [],
         "confidence": 0.83,
     }
+
+
+def test_llm_provider_can_send_deepseek_thinking_toggle() -> None:
+    requests = []
+
+    def fake_post(url: str, *, headers: dict, json: dict, timeout: float):
+        requests.append(json)
+        return MockResponse('{"origin_region":"滨江","available_hours":3,"ride_style":"scenic_relaxed","missing_fields":[],"confidence":0.91}')
+
+    provider = OpenAICompatibleLLMProvider(
+        base_url="https://api.deepseek.com",
+        api_key="test-key",
+        model="deepseek-v4-flash",
+        timeout_seconds=5,
+        thinking="disabled",
+        http_post=fake_post,
+    )
+
+    provider.parse_query(query="周六从闻涛路滨江段出发骑3小时，不想太累", user_profile={})
+
+    assert requests[0]["thinking"] == {"type": "disabled"}
+
+
+def test_llm_provider_omits_thinking_toggle_by_default() -> None:
+    requests = []
+
+    def fake_post(url: str, *, headers: dict, json: dict, timeout: float):
+        requests.append(json)
+        return MockResponse('{"origin_region":"滨江","available_hours":3,"ride_style":"scenic_relaxed","missing_fields":[],"confidence":0.91}')
+
+    provider = OpenAICompatibleLLMProvider(
+        base_url="https://example.com/v1",
+        api_key="test-key",
+        model="test-model",
+        timeout_seconds=5,
+        http_post=fake_post,
+    )
+
+    provider.parse_query(query="周六从闻涛路滨江段出发骑3小时，不想太累", user_profile={})
+
+    assert "thinking" not in requests[0]

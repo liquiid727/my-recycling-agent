@@ -80,9 +80,19 @@ LLM 相关能力当前采用“可接入、默认降级”的模式：
 - `CYCLING_AGENT_LLM_API_BASE_URL`
 - `CYCLING_AGENT_LLM_API_KEY`
 - `CYCLING_AGENT_LLM_MODEL`
+- `CYCLING_AGENT_LLM_THINKING`（可选；DeepSeek V4 建议设为 `disabled`，保证 JSON 解析路径不进入 thinking mode）
 - `CYCLING_AGENT_LLM_TIMEOUT_SECONDS`
 
 如未配置这些变量，`QueryParserAgent` 和 `RoadbookGeneratorAgent` 会继续使用当前 deterministic fallback，并在 `tool_trace` 中体现。
+
+DeepSeek 当前推荐配置示例：
+
+```bash
+CYCLING_AGENT_LLM_API_BASE_URL=https://api.deepseek.com
+CYCLING_AGENT_LLM_API_KEY=你的DeepSeekKey
+CYCLING_AGENT_LLM_MODEL=deepseek-v4-flash
+CYCLING_AGENT_LLM_THINKING=disabled
+```
 
 缓存层当前采用“默认内存缓存、可切 Redis”的方式：
 
@@ -162,6 +172,7 @@ cd /Users/liquiid/code/cycling-agent-docs/products/cycling-agent/backend
 CYCLING_AGENT_LLM_API_BASE_URL=... \
 CYCLING_AGENT_LLM_API_KEY=... \
 CYCLING_AGENT_LLM_MODEL=... \
+CYCLING_AGENT_LLM_THINKING=disabled \
 pytest tests/test_llm_live_integration.py -v
 python scripts/verify_llm_live.py
 ```

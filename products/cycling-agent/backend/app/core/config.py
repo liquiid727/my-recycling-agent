@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     llm_api_base_url: str | None = None
     llm_api_key: str | None = None
     llm_model: str | None = None
+    llm_thinking: str | None = None
     llm_timeout_seconds: float = 20.0
     weather_provider_base_url: str = "https://api.open-meteo.com/v1/forecast"
     weather_timeout_seconds: float = 8.0
