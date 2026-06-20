@@ -1,0 +1,35 @@
+Case001
+
+input:
+
+  weather: sunny
+
+  available_time: 2h
+
+  mood: relax
+
+expected:
+
+  ride_today
+
+  20-40km
+
+Case002
+
+input:
+
+  weather: rain
+
+expected:
+
+  rest_today
+
+Case003
+
+input:
+
+  last_ride_days: 30
+
+expected:
+
+  recovery_ride
