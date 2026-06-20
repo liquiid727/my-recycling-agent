@@ -260,6 +260,20 @@ def _sqlite_statements() -> list[str]:
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS experience_contents (
+            content_key TEXT PRIMARY KEY,
+            payload_json TEXT NOT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS lifestyle_profiles (
+            profile_key TEXT PRIMARY KEY,
+            payload_json TEXT NOT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
     ]
 
 

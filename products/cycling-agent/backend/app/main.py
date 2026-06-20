@@ -5,6 +5,8 @@ EN: FastAPI application factory that wires providers, repositories, cache, route
 from fastapi import FastAPI
 
 from app.api.routes.admin import router as admin_router
+from app.api.routes.experience import admin_router as experience_admin_router
+from app.api.routes.experience import router as experience_router
 from app.api.routes.profile import router as profile_router
 from app.api.routes.ride_chat import router as ride_chat_router
 from app.api.routes.ride_plan import router as ride_plan_router
@@ -51,8 +53,10 @@ def create_app(*, weather_provider: OpenMeteoWeatherProvider | None = None, rout
     app.include_router(ride_chat_router)
     app.include_router(ride_plan_router)
     app.include_router(route_catalog_router)
+    app.include_router(experience_router)
     app.include_router(profile_router)
     app.include_router(admin_router)
+    app.include_router(experience_admin_router)
 
     @app.get("/health")
     async def healthcheck() -> dict[str, str]:

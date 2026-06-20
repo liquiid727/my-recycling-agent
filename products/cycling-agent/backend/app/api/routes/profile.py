@@ -4,7 +4,9 @@ EN: User profile API for loading and saving the default rider preferences used b
 
 from fastapi import APIRouter, HTTPException, Request
 
+from app.repositories.lifestyle_profile_repository import get_lifestyle_profile, save_lifestyle_profile
 from app.repositories.user_profile_repository import get_default_user_profile, save_default_user_profile
+from app.schemas.experience import LifestyleProfileSchema
 from app.schemas.ride_plan import UserProfilePayload
 
 
@@ -29,3 +31,23 @@ async def put_default_profile(payload: UserProfilePayload, request: Request) -> 
         raise HTTPException(status_code=500, detail="database-url-missing")
     saved = save_default_user_profile(database_url, payload.model_dump())
     return UserProfilePayload.model_validate(saved)
+
+
+@router.get("/lifestyle", response_model=LifestyleProfileSchema)
+async def get_lifestyle_profile_payload(request: Request) -> LifestyleProfileSchema:
+    database_url = getattr(request.app.state, "database_url", None)
+    if not database_url:
+        raise HTTPException(status_code=500, detail="database-url-missing")
+    profile = get_lifestyle_profile(database_url)
+    if profile is None:
+        return LifestyleProfileSchema()
+    return LifestyleProfileSchema.model_validate(profile)
+
+
+@router.put("/lifestyle", response_model=LifestyleProfileSchema)
+async def put_lifestyle_profile_payload(payload: LifestyleProfileSchema, request: Request) -> LifestyleProfileSchema:
+    database_url = getattr(request.app.state, "database_url", None)
+    if not database_url:
+        raise HTTPException(status_code=500, detail="database-url-missing")
+    saved = save_lifestyle_profile(database_url, payload.model_dump(mode="json"))
+    return LifestyleProfileSchema.model_validate(saved)
