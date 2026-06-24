@@ -19,7 +19,7 @@ Traceability:
 - 后端：FastAPI，提供骑行规划、路线目录、用户偏好、后台维护和规划审计 API。
 - 前端：React + Vite，提供首页规划、结果页、路线详情、设置页和后台页。
 - 数据：`data/hangzhou_routes.json`、`data/hangzhou_nearby_destinations.json`、`data/hangzhou_trip_templates.json` 作为杭州 mvp1 / mvp2 模板种子。
-- 基础设施：默认 SQLite + 内存缓存，可切 PostgreSQL + Redis。
+- 基础设施：PostgreSQL + 内存缓存，可切 Redis。
 - 外部能力：天气默认 Open-Meteo；路线/POI 可切高德；LLM 可接 OpenAI-compatible API，未配置时走 deterministic fallback。
 
 ## 2. 目录结构
@@ -64,7 +64,7 @@ products/cycling-agent/
 - `frontend/node_modules/`: 前端依赖。
 - `frontend/dist/`: 构建产物。
 - `backend/.deps/`, `__pycache__/`, `.pytest_cache/`: 本地依赖或缓存。
-- `*.json`, lockfile, 数据库文件：JSON/lockfile/SQLite 不能安全加入代码注释，需通过文档说明。
+- `*.json`, lockfile, 数据库内容：JSON/lockfile/数据库内容不能安全加入代码注释，需通过文档说明。
 
 ## 3. 后端结构
 
@@ -76,9 +76,10 @@ products/cycling-agent/
 - `api/routes/ride_plan.py`: 规划入口，包含普通 `POST /api/v1/ride/plan` 和 SSE `POST /api/v1/ride/plan/stream`。
 - `api/routes/route_catalog.py`: 推荐路线列表和路线详情。
 - `api/routes/profile.py`: 默认用户偏好读取与保存。
+- `api/routes/experience_share.py`: 完成骑行、照片上传和骑后分享生成接口。
 - `api/routes/admin.py`: 路线模板、周边目的地、周边游模板、城市策略、风险规则、查询日志、审计记录后台接口。
 - `core/config.py`: 环境变量配置。
-- `core/storage.py`: SQLite/PostgreSQL 兼容存储初始化与轻量迁移。
+- `core/storage.py`: PostgreSQL 存储初始化与轻量迁移。
 - `core/cache.py`: 内存缓存和 Redis 缓存统一接口。
 - `providers/`: 天气、路线、POI、LLM provider。
 - `repositories/`: 数据访问层，保持 API/服务不直接写 SQL。
@@ -183,7 +184,7 @@ mvp2 额外包含：
 
 默认本地运行：
 
-- Database: `sqlite:///./cycling-agent.db`
+- Database: `postgresql://cycling:cycling@127.0.0.1:54329/cycling_agent`
 - Cache: in-memory
 - Weather: Open-Meteo + fallback
 - Route/POI: local provider
@@ -203,7 +204,7 @@ mvp2 额外包含：
 - API：规划、路线、用户偏好、后台、审计。
 - 服务：路线匹配、风险评分、城市策略、路书。
 - provider：天气、路线、POI、LLM fallback/live 边界。
-- 存储：SQLite/PostgreSQL 兼容层、缓存层、业务编号。
+- 存储：PostgreSQL 存储层、缓存层、业务编号。
 
 前端测试覆盖：
 
@@ -229,7 +230,7 @@ npm run build
 - 没有 live key 时，无法证明高德和 LLM 的真实端到端调用质量。
 - 风险评分是 MVP 规则引擎，不是模型学习结果。
 - 前端仍是 MVP 工作台形态，但用户可见主入口已经改为真实使用场景；后台维护表单仍偏工程化。
-- JSON 数据、lockfile、SQLite 数据库和构建产物不能加代码注释，后续理解以本文档和 schema 为主。
+- JSON 数据、lockfile、数据库内容和构建产物不能加代码注释，后续理解以本文档和 schema 为主。
 
 ## 10. 快速阅读顺序
 

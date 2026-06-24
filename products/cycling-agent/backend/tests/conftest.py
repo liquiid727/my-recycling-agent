@@ -2,7 +2,11 @@
 EN: Backend test file covering APIs, services, repositories, providers, cache, and live integration boundaries.
 """
 
+import os
+
 import pytest
+
+from app.core.storage import connect, init_storage
 
 
 LIVE_ENV_KEYS = [
@@ -14,6 +18,30 @@ LIVE_ENV_KEYS = [
     "CYCLING_AGENT_REDIS_URL",
     "CYCLING_AGENT_ROUTE_PROVIDER_MODE",
     "CYCLING_AGENT_POI_PROVIDER_MODE",
+]
+
+TEST_DATABASE_URL = os.environ.get(
+    "CYCLING_AGENT_TEST_DATABASE_URL",
+    "postgresql://cycling:cycling@127.0.0.1:54329/cycling_agent",
+)
+
+TRUNCATE_TABLES = [
+    "post_ride_shares",
+    "media_assets",
+    "completed_rides",
+    "risk_assessments",
+    "decision_results",
+    "weather_snapshots",
+    "ride_requests",
+    "query_logs",
+    "ride_plans",
+    "nearby_destinations",
+    "trip_templates",
+    "route_templates",
+    "city_strategy_configs",
+    "experience_contents",
+    "lifestyle_profiles",
+    "user_profiles",
 ]
 
 
@@ -75,3 +103,11 @@ def isolate_live_env(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureReq
         return
     for key in LIVE_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
+
+
+def set_test_database_url(monkeypatch: pytest.MonkeyPatch) -> str:
+    monkeypatch.setenv("CYCLING_AGENT_DATABASE_URL", TEST_DATABASE_URL)
+    init_storage(TEST_DATABASE_URL)
+    with connect(TEST_DATABASE_URL) as connection:
+        connection.execute(f"TRUNCATE TABLE {', '.join(TRUNCATE_TABLES)} RESTART IDENTITY CASCADE")
+    return TEST_DATABASE_URL

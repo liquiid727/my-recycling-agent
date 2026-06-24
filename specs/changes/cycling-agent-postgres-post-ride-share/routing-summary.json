@@ -1,0 +1,19 @@
+{
+  "selectedRoutes": ["backend", "migration"],
+  "executionMode": "test-after-execution",
+  "reasoning": [
+    "The change alters accepted runtime storage semantics and therefore requires migration-scope ownership.",
+    "The change adds new FastAPI routes, schemas, repositories, provider behavior, and backend tests."
+  ],
+  "handoffArtifacts": [
+    "specs/changes/cycling-agent-postgres-post-ride-share/spec.md",
+    "specs/changes/cycling-agent-postgres-post-ride-share/architecture-review.md",
+    "specs/changes/cycling-agent-postgres-post-ride-share/design-review.md",
+    "specs/changes/cycling-agent-postgres-post-ride-share/execution-plan.md"
+  ],
+  "gates": [
+    "PostgreSQL-only config and storage path implemented",
+    "Completed-ride and post-ride-share API contracts implemented",
+    "Focused backend validation recorded before promotion"
+  ]
+}

@@ -27,19 +27,11 @@ uvicorn app.main:app --reload
 
 健康检查：`http://127.0.0.1:8000/health`
 
-默认使用本地 SQLite 文件 `backend/cycling-agent.db`。
-如需切换数据库文件位置：
+当前后端只支持 PostgreSQL。默认本地开发数据库地址为：
 
 ```bash
-CYCLING_AGENT_DATABASE_URL=sqlite:///./tmp/cycling-agent.db uvicorn app.main:app --reload
+export CYCLING_AGENT_DATABASE_URL=postgresql://cycling:cycling@127.0.0.1:54329/cycling_agent
 ```
-
-当前存储层已经支持两类 `database_url`：
-
-- `sqlite:///...`
-- `postgresql://...` / `postgres://...`
-
-当前环境默认仍跑 SQLite，但 `connect()/init_storage()` 已经具备 PostgreSQL 兼容适配层，repository 继续复用统一接口。
 
 当前也已经按技术规格拆出第一版规范化审计实体：
 
@@ -49,7 +41,7 @@ CYCLING_AGENT_DATABASE_URL=sqlite:///./tmp/cycling-agent.db uvicorn app.main:app
 - `decision_results`
 - 以及现有的 `ride_plans`、`query_logs`、路线模板与策略表
 
-这样一次规划请求除了完整 payload，还会同步写入请求、天气、逐路线风险和最终决策四类记录，便于后续迁移到 PostgreSQL 时保持实体边界。
+这样一次规划请求除了完整 payload，还会同步写入请求、天气、逐路线风险和最终决策四类记录。
 
 当前用户偏好也已经支持后端持久化：
 
@@ -58,7 +50,7 @@ CYCLING_AGENT_DATABASE_URL=sqlite:///./tmp/cycling-agent.db uvicorn app.main:app
 
 前端 `/settings` 会优先同步远端偏好，再保留本地 `localStorage` fallback，避免同一浏览器里的偏好丢失。
 
-如需本地起真实 `PostgreSQL + Redis`：
+本地运行前，先起 `PostgreSQL + Redis`：
 
 ```bash
 cd /Users/liquiid/code/cycling-agent-docs/products/cycling-agent
@@ -82,6 +74,11 @@ LLM 相关能力当前采用“可接入、默认降级”的模式：
 - `CYCLING_AGENT_LLM_MODEL`
 - `CYCLING_AGENT_LLM_THINKING`（可选；DeepSeek V4 建议设为 `disabled`，保证 JSON 解析路径不进入 thinking mode）
 - `CYCLING_AGENT_LLM_TIMEOUT_SECONDS`
+- `CYCLING_AGENT_IMAGE_API_BASE_URL`
+- `CYCLING_AGENT_IMAGE_API_KEY`
+- `CYCLING_AGENT_IMAGE_MODEL`
+- `CYCLING_AGENT_IMAGE_TIMEOUT_SECONDS`
+- `CYCLING_AGENT_MEDIA_LOCAL_DIR`
 
 如未配置这些变量，`QueryParserAgent` 和 `RoadbookGeneratorAgent` 会继续使用当前 deterministic fallback，并在 `tool_trace` 中体现。
 
@@ -210,6 +207,10 @@ npm run build
 - `GET /api/v1/routes/{route_code}`: 读取单条路线的完整详情，包括时间窗、补给点、撤退方案和关键爬坡段
 - `GET /api/v1/profile/default`: 读取默认用户偏好
 - `PUT /api/v1/profile/default`: 保存默认用户偏好
+- `POST /api/v1/experience/rides/{request_no}/complete`: 标记一次规划已完成骑行
+- `POST /api/v1/experience/photo-assets`: 上传骑后照片
+- `POST /api/v1/experience/post-ride-shares`: 生成风格化骑行明星片和分享文案
+- `GET /api/v1/experience/post-ride-shares/{share_no}`: 读取骑后分享生成结果
 - `POST /api/v1/admin/routes`: 录入或更新路线模板
 - `GET /api/v1/admin/routes`: 读取后台路线模板列表
 - `POST /api/v1/admin/city-strategy`: 录入或更新城市策略配置

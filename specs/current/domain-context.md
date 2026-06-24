@@ -68,6 +68,9 @@ The current accepted entity set includes:
 - `DecisionResult`
 - `CityStrategyConfig`
 - `RiskRule`
+- `CompletedRide`
+- `MediaAsset`
+- `PostRideShare`
 - persisted plan result and planning audit records
 
 The exact storage shape can evolve, but accepted terminology should stay aligned
@@ -86,7 +89,7 @@ with the current backend schemas and repositories.
 - Risk and strategy: weather facts, route risk scoring, city bias, and
   operator-maintained risk rules
 - User experience delivery: frontend request entry, result rendering, route
-  details, settings, and admin surfaces
+  details, settings, post-ride sharing, and admin surfaces
 - Verification and audit: tests, provider traces, query logs, and normalized
   audit records
 

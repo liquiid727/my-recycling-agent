@@ -25,7 +25,8 @@ The current accepted product supports two user-facing planning scenes:
 ## Accepted Product Surfaces
 
 - Backend API: FastAPI planning, route catalog, profile, admin, chat-turn, and
-  audit endpoints under `products/cycling-agent/backend/app/`
+  audit endpoints plus post-ride sharing endpoints under
+  `products/cycling-agent/backend/app/`
 - Frontend web app: React + Vite user and admin surfaces under
   `products/cycling-agent/frontend/`
 - Seed data: Hangzhou route, nearby destination, and trip-template JSON assets

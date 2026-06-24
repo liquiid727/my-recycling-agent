@@ -4,6 +4,7 @@ EN: OpenAI-compatible LLM provider used by query parsing and roadbook generation
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from typing import Any, Callable
@@ -85,6 +86,34 @@ class OpenAICompatibleLLMProvider:
                     "planning_scene": planning_scene,
                     "target_date": str(target_date),
                     "user_profile": user_profile or {},
+                },
+                ensure_ascii=False,
+            ),
+        )
+        return json.loads(payload)
+
+    def generate_post_ride_share_copy(
+        self,
+        *,
+        ride_context: dict[str, Any],
+        style_preset: str,
+        caption_tone: str,
+        channel_targets: list[str],
+    ) -> dict[str, Any]:
+        payload = self._chat_completion(
+            system_prompt=(
+                "你是骑后分享文案助手。只输出 JSON。"
+                "只能使用已提供的骑行事实、路线摘要和用户备注。"
+                "不得虚构距离、天气、成就、同行人、具体住址。"
+                "输出顶层只包含 copy_variants。"
+                "copy_variants 可包含 xiaohongshu 和 moments。"
+            ),
+            user_prompt=json.dumps(
+                {
+                    "ride_context": ride_context,
+                    "style_preset": style_preset,
+                    "caption_tone": caption_tone,
+                    "channel_targets": channel_targets,
                 },
                 ensure_ascii=False,
             ),
@@ -272,3 +301,74 @@ class OpenAICompatibleLLMProvider:
         if not combined:
             return None
         return self._normalize_ride_style(combined)
+
+
+class OpenAICompatibleImageProvider:
+    provider_name = "openai-compatible-image"
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        model: str,
+        timeout_seconds: float,
+        http_post: Callable[..., Any] | None = None,
+        http_get: Callable[..., Any] | None = None,
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.model = model
+        self.timeout_seconds = timeout_seconds
+        self.http_post = http_post or httpx.post
+        self.http_get = http_get or httpx.get
+
+    def edit_ride_photo(
+        self,
+        *,
+        image_bytes: bytes,
+        image_mime_type: str,
+        prompt: str,
+        size: str = "1024x1024",
+    ) -> dict[str, Any]:
+        extension = _mime_type_to_extension(image_mime_type)
+        response = self.http_post(
+            f"{self.base_url}/images/edits",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            data={
+                "model": self.model,
+                "prompt": prompt,
+                "size": size,
+            },
+            files={
+                "image": (f"ride-photo.{extension}", image_bytes, image_mime_type),
+            },
+            timeout=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        item = (payload.get("data") or [{}])[0]
+        if item.get("b64_json"):
+            return {
+                "image_bytes": base64.b64decode(item["b64_json"]),
+                "mime_type": "image/png",
+                "provider_payload": payload,
+            }
+        if item.get("url"):
+            image_response = self.http_get(item["url"], timeout=self.timeout_seconds)
+            image_response.raise_for_status()
+            return {
+                "image_bytes": image_response.content,
+                "mime_type": image_response.headers.get("Content-Type", "image/png"),
+                "provider_payload": payload,
+            }
+        raise RuntimeError("image-generation-empty-payload")
+
+
+def _mime_type_to_extension(mime_type: str) -> str:
+    mapping = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }
+    return mapping.get(mime_type, "png")

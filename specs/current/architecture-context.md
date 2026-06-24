@@ -59,8 +59,8 @@ Business ranking, risk, and final recommendation selection remain backend-owned.
 
 ## Data And Infrastructure Boundaries
 
-- Default local baseline: SQLite plus in-memory cache
-- Optional live infrastructure: PostgreSQL plus Redis
+- Default local baseline: PostgreSQL plus in-memory cache
+- Optional cache infrastructure: Redis
 - Default weather: Open-Meteo with fallback snapshot behavior
 - Default route and POI enrichment: local or template-backed behavior, with
   optional AMap-backed enhancement

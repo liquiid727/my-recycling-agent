@@ -9,12 +9,16 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CYCLING_AGENT_", extra="ignore")
 
     app_name: str = "cycling-agent-backend"
-    database_url: str = "sqlite:///./cycling-agent.db"
+    database_url: str = "postgresql://cycling:cycling@127.0.0.1:54329/cycling_agent"
     llm_api_base_url: str | None = None
     llm_api_key: str | None = None
     llm_model: str | None = None
     llm_thinking: str | None = None
     llm_timeout_seconds: float = 20.0
+    image_api_base_url: str | None = None
+    image_api_key: str | None = None
+    image_model: str | None = None
+    image_timeout_seconds: float = 60.0
     weather_provider_base_url: str = "https://api.open-meteo.com/v1/forecast"
     weather_timeout_seconds: float = 8.0
     redis_url: str | None = None
@@ -25,3 +29,7 @@ class Settings(BaseSettings):
     amap_base_url: str = "https://restapi.amap.com"
     amap_web_api_key: str | None = None
     amap_timeout_seconds: float = 10.0
+    media_storage_mode: str = "local"
+    media_local_dir: str = "./generated-media"
+    media_public_base_path: str = "/generated-media"
+    media_upload_max_bytes: int = 10 * 1024 * 1024
