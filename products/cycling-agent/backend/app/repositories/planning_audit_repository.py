@@ -19,6 +19,7 @@ def save_planning_audit(
 ) -> None:
     parsed_constraints = plan_payload["parsed_constraints"]
     user_profile = request_payload.get("user_profile")
+    rider_state = request_payload.get("rider_state")
     weather_snapshot = plan_payload["weather_snapshot"]
     audit_payload = plan_payload.get("_audit", {})
     candidate_assessments = audit_payload.get("candidate_assessments", [])
@@ -51,9 +52,10 @@ def save_planning_audit(
                 fitness_level,
                 ride_style,
                 parsed_constraints_json,
-                user_profile_json
+                user_profile_json,
+                rider_state_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(request_no) DO UPDATE SET
                 id = excluded.id,
                 city_code = excluded.city_code,
@@ -65,7 +67,8 @@ def save_planning_audit(
                 fitness_level = excluded.fitness_level,
                 ride_style = excluded.ride_style,
                 parsed_constraints_json = excluded.parsed_constraints_json,
-                user_profile_json = excluded.user_profile_json
+                user_profile_json = excluded.user_profile_json,
+                rider_state_json = excluded.rider_state_json
             """,
             (
                 existing_ride_request["id"] if existing_ride_request and existing_ride_request["id"] else generate_uuid_v7_like(),
@@ -80,6 +83,7 @@ def save_planning_audit(
                 parsed_constraints.get("ride_style"),
                 json.dumps(parsed_constraints, ensure_ascii=False),
                 json.dumps(user_profile, ensure_ascii=False) if user_profile else None,
+                json.dumps(rider_state, ensure_ascii=False) if rider_state else None,
             ),
         )
         connection.execute(
@@ -230,7 +234,7 @@ def get_planning_audit(database_url: str, request_no: str) -> dict[str, Any] | N
         ride_request = connection.execute(
             """
             SELECT id, request_no, city_code, raw_query, target_date, origin_region, available_hours, target_distance_km,
-                   fitness_level, ride_style, parsed_constraints_json, user_profile_json, created_at
+                   fitness_level, ride_style, parsed_constraints_json, user_profile_json, rider_state_json, created_at
             FROM ride_requests
             WHERE request_no = ?
             """,
@@ -284,6 +288,7 @@ def get_planning_audit(database_url: str, request_no: str) -> dict[str, Any] | N
             "ride_style": ride_request["ride_style"],
             "parsed_constraints": json.loads(ride_request["parsed_constraints_json"]),
             "user_profile": json.loads(ride_request["user_profile_json"]) if ride_request["user_profile_json"] else None,
+            "rider_state": json.loads(ride_request["rider_state_json"]) if ride_request["rider_state_json"] else None,
             "created_at": _normalize_datetime(ride_request["created_at"]),
         },
         "weather_snapshot": None

@@ -117,6 +117,7 @@ def test_chat_turn_asks_warm_follow_up_for_vague_city_ride() -> None:
     assert body["ready_to_plan"] is False
     assert body["missing_slots"] == ["start_point", "available_hours_or_target_distance_km"]
     assert "你现在从哪里出发" in body["assistant_message"]
+    assert "多少公里" in body["assistant_message"]
     assert "当前还缺少关键信息" not in body["assistant_message"]
     assert body["ui_hints"]["quick_replies"]
 
@@ -148,6 +149,8 @@ def test_chat_turn_second_reply_returns_planner_request() -> None:
     assert body["planner_request"]["input_mode"] == "structured"
     assert body["planner_request"]["structured_constraints"]["start_point"] == "沈塘桥"
     assert body["planner_request"]["structured_constraints"]["available_hours"] == 2
+    assert body["planner_request"]["structured_constraints"]["ride_style"] is None
+    assert body["planner_request"]["structured_constraints"]["slope_tolerance"] is None
     assert "missing_fields" not in body["assistant_message"]
 
 
@@ -174,6 +177,7 @@ def test_chat_turn_falls_back_when_llm_fails() -> None:
     assert body["slot_state"]["start_point"] == "沈塘桥"
     assert body["slot_state"]["available_hours"] == 2
     assert body["planner_request"] is not None
+    assert "风和温度" in body["assistant_message"]
 
 
 def test_chat_turn_fallback_accepts_bare_road_name_and_duration() -> None:
@@ -280,6 +284,51 @@ def test_chat_turn_validator_normalizes_llm_enum_slots_before_planning() -> None
     assert body["planner_request"]["structured_constraints"]["slope_tolerance"] == "avoid"
 
 
+def test_chat_turn_fallback_reconciles_no_climb_intent() -> None:
+    app = create_app()
+    app.state.llm_provider = BrokenChatLLMProvider()
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/ride/chat/turn",
+        json={
+            "messages": [{"role": "user", "content": "凤起路，2h吧，不要爬坡"}],
+            "planning_scene": "city_ride",
+            "target_date": "2026-06-06",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ready_to_plan"] is True
+    assert body["slot_state"]["slope_tolerance"] == "avoid"
+    assert body["slot_state"]["ride_style"] == "scenic_relaxed"
+    assert "带点爬坡" not in body["assistant_message"]
+    assert "轻松一点" in body["assistant_message"]
+
+
+def test_chat_turn_ready_message_respects_tired_rider_state() -> None:
+    app = create_app()
+    app.state.llm_provider = BrokenChatLLMProvider()
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/ride/chat/turn",
+        json={
+            "messages": [{"role": "user", "content": "凤起路，2h吧"}],
+            "planning_scene": "city_ride",
+            "target_date": "2026-06-06",
+            "rider_state": {"fatigue_level": "tired", "mood": "recover", "last_ride_days_ago": 0},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ready_to_plan"] is True
+    assert body["rider_state"]["fatigue_level"] == "tired"
+    assert "轻松恢复一下" in body["assistant_message"]
+
+
 def test_chat_turn_falls_back_quickly_when_llm_is_slow(monkeypatch) -> None:
     monkeypatch.setattr(chat_turn_agent, "LLM_CHAT_TIMEOUT_SECONDS", 0.01)
     app = create_app()
@@ -304,3 +353,71 @@ def test_chat_turn_falls_back_quickly_when_llm_is_slow(monkeypatch) -> None:
     assert body["ready_to_plan"] is True
     assert body["slot_state"]["start_point"] == "凤起路"
     assert body["slot_state"]["available_hours"] == 2
+
+
+def test_chat_turn_weekend_follow_up_asks_for_days_and_overnight() -> None:
+    app = create_app()
+    app.state.llm_provider = BrokenChatLLMProvider()
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/ride/chat/turn",
+        json={
+            "messages": [{"role": "user", "content": "周末想出去骑车，附近有什么推荐线路么"}],
+            "planning_scene": "weekend_trip",
+            "target_date": "2026-06-06",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ready_to_plan"] is False
+    assert body["missing_slots"] == ["start_point", "duration_bucket", "overnight_preference"]
+    assert "想骑一天、两天还是三天" in body["assistant_message"]
+    assert "住一晚" in body["assistant_message"]
+    assert body["ui_hints"]["quick_replies"] == ["滨江出发", "城西出发", "杭州东附近"]
+
+
+def test_chat_turn_weekend_ready_message_mentions_window_and_backup_shape() -> None:
+    app = create_app()
+    app.state.llm_provider = BrokenChatLLMProvider()
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/ride/chat/turn",
+        json={
+            "messages": [{"role": "user", "content": "这周末想去千岛湖骑两天，从滨江区政府出发，可以住一晚"}],
+            "planning_scene": "weekend_trip",
+            "target_date": "2026-06-06",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ready_to_plan"] is True
+    assert body["slot_state"]["duration_bucket"] == "two_day"
+    assert body["slot_state"]["overnight_preference"] == "required"
+    assert "千岛湖" in body["assistant_message"]
+    assert "天气窗口、住宿和返程" in body["assistant_message"]
+    assert body["ui_hints"]["planning_status_label"] == "我在看天气窗口、住宿和返程"
+
+
+def test_chat_turn_allows_explicit_weekend_query_to_override_city_scene_hint() -> None:
+    app = create_app()
+    app.state.llm_provider = BrokenChatLLMProvider()
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/ride/chat/turn",
+        json={
+            "messages": [{"role": "user", "content": "周末想从凤起路出发骑两天，可以住一晚"}],
+            "planning_scene": "city_ride",
+            "target_date": "2026-06-06",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["slot_state"]["planning_scene"] == "weekend_trip"
+    assert body["planner_request"]["planning_scene"] == "weekend_trip"
+    assert body["planner_request"]["planning_mode"] == "nearby_trip"

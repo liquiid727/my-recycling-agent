@@ -88,24 +88,15 @@ def discover_nearby_route_candidates(
                     preferred_distance_km,
                     preferred_duration_hours,
                 ),
-                "route_context": {
-                    "provider_name": "dynamic-nearby-route",
-                    "fact_source": "amap-dynamic",
-                    "distance_km": distance_km,
-                    "estimated_duration_hours": duration_hours,
-                    "template_distance_km": distance_km,
-                    "template_duration_hours": duration_hours,
-                    "total_distance_km": distance_km,
-                    "total_duration_hours": duration_hours,
-                    "approach_distance_km": 0.0,
-                    "approach_duration_hours": 0.0,
-                    "user_start_point": origin,
-                    "template_start_point": origin,
-                    "end_point": anchor,
-                    "polyline": [*polyline, *return_polyline[1:]],
-                    "surface_type": surface_type,
-                    "loop_type": "out_and_back",
-                },
+                "route_context": _build_dynamic_route_context(
+                    user_start_point=origin,
+                    end_point=anchor,
+                    distance_km=distance_km,
+                    duration_hours=duration_hours,
+                    polyline=[*polyline, *return_polyline[1:]],
+                    surface_type=surface_type,
+                    loop_type="out_and_back",
+                ),
             }
         )
         candidate["anchor_quality_score"] = _anchor_quality_score(anchor)
@@ -228,24 +219,15 @@ def _format_multi_anchor_candidate(
             preferred_duration_hours,
         ),
         "anchor_quality_score": max(_anchor_quality_score(anchor) for anchor in anchors) + 1,
-        "route_context": {
-            "provider_name": "dynamic-nearby-route",
-            "fact_source": "amap-dynamic",
-            "distance_km": distance_km,
-            "estimated_duration_hours": duration_hours,
-            "template_distance_km": distance_km,
-            "template_duration_hours": duration_hours,
-            "total_distance_km": distance_km,
-            "total_duration_hours": duration_hours,
-            "approach_distance_km": 0.0,
-            "approach_duration_hours": 0.0,
-            "user_start_point": origin,
-            "template_start_point": origin,
-            "end_point": anchors[-1],
-            "polyline": polyline,
-            "surface_type": "greenway",
-            "loop_type": "multi_anchor_loop",
-        },
+        "route_context": _build_dynamic_route_context(
+            user_start_point=origin,
+            end_point=anchors[-1],
+            distance_km=distance_km,
+            duration_hours=duration_hours,
+            polyline=polyline,
+            surface_type="greenway",
+            loop_type="multi_anchor_loop",
+        ),
     }
 
 
@@ -312,3 +294,51 @@ def _scenic_score_for_anchor(anchor: dict[str, Any]) -> int:
     if any(token in anchor_text for token in ("公园", "绿地", "湖", "河", "运河")):
         return 8
     return 6
+
+
+def _build_dynamic_route_context(
+    *,
+    user_start_point: dict[str, Any],
+    end_point: dict[str, Any],
+    distance_km: float,
+    duration_hours: float,
+    polyline: list[dict[str, float]],
+    surface_type: str,
+    loop_type: str,
+) -> dict[str, Any]:
+    live = {
+        "provider_name": "dynamic-nearby-route",
+        "fact_source": "amap-dynamic",
+        "user_start_point": user_start_point,
+        "end_point": end_point,
+        "polyline": polyline,
+        "approach_distance_km": 0.0,
+        "approach_duration_hours": 0.0,
+    }
+    resolved = {
+        "provider_name": "dynamic-nearby-route",
+        "fact_source": "amap-dynamic",
+        "metric_source": "dynamic-live",
+        "distance_km": distance_km,
+        "estimated_duration_hours": duration_hours,
+        "total_distance_km": distance_km,
+        "total_duration_hours": duration_hours,
+    }
+    return {
+        "provider_name": "dynamic-nearby-route",
+        "fact_source": "amap-dynamic",
+        "distance_km": distance_km,
+        "estimated_duration_hours": duration_hours,
+        "total_distance_km": distance_km,
+        "total_duration_hours": duration_hours,
+        "approach_distance_km": 0.0,
+        "approach_duration_hours": 0.0,
+        "user_start_point": user_start_point,
+        "end_point": end_point,
+        "polyline": polyline,
+        "surface_type": surface_type,
+        "loop_type": loop_type,
+        "template": None,
+        "live": live,
+        "resolved": resolved,
+    }

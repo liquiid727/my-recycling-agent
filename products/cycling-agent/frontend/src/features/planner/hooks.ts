@@ -18,7 +18,7 @@ import {
   RidePlanResponse,
   StructuredConstraints
 } from "./api";
-import { loadUserProfile } from "../settings/store";
+import { loadRiderState, loadUserProfile, saveRiderState, type RiderState } from "../settings/store";
 
 type PlannerState = {
   messages: PlannerMessage[];
@@ -29,6 +29,7 @@ type PlannerState = {
   targetDate: string;
   structuredConstraints: StructuredConstraints;
   slotState: Record<string, unknown>;
+  riderState: RiderState;
   quickReplies: string[];
   clarificationPrompt: string | null;
   loading: boolean;
@@ -61,22 +62,10 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
     planningMode: "route",
     planningScene: "city_ride",
     inputMode: "natural",
-    targetDate: "2026-05-30",
-    structuredConstraints: {
-      departure_time: "07:00",
-      origin_region: "滨江",
-      start_point: "闻涛路滨江段",
-      available_hours: 3,
-      target_distance_km: 42,
-      fitness_level: "medium",
-      ride_style: "scenic_relaxed",
-      slope_tolerance: "avoid",
-      priority: "风景",
-      duration_bucket: "evening",
-      destination_preferences: ["江边", "咖啡"],
-      return_preference: "ride_back"
-    },
+    targetDate: formatLocalDate(new Date()),
+    structuredConstraints: createEmptyStructuredConstraints(),
     slotState: {},
+    riderState: loadRiderState(),
     quickReplies: DEFAULT_QUICK_REPLIES,
     clarificationPrompt: null,
     loading: false,
@@ -110,6 +99,7 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
 
     try {
       const userProfile = loadUserProfile();
+      const riderState = state.riderState;
       if (state.inputMode === "natural") {
         const chatMessages: ChatTurnMessage[] = [
           ...state.messages.map((message) => ({ role: message.role, content: message.content })),
@@ -122,7 +112,8 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
             target_date: state.targetDate,
             slot_state: state.slotState
           },
-          userProfile
+          userProfile,
+          riderState
         );
 
         if (!chatTurn.ready_to_plan || !chatTurn.planner_request) {
@@ -148,14 +139,14 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
           messages: [...current.messages, buildMessage("assistant", chatTurn.assistant_message)],
           loadingLabel: chatTurn.ui_hints?.planning_status_label ?? "我在看天气和路线难度"
         }));
-        const result = await createRidePlanStream(chatTurn.planner_request, userProfile, {
+        const result = await createRidePlanStream(chatTurn.planner_request, userProfile, riderState, {
           onStage: (stage) => {
             setState((current) => ({
               ...current,
               stageUpdates: [...current.stageUpdates, stage]
             }));
           }
-        }).catch(async () => createRidePlan(chatTurn.planner_request as PlannerRequest, userProfile));
+        }).catch(async () => createRidePlan(chatTurn.planner_request as PlannerRequest, userProfile, riderState));
         setState((current) => ({
           ...current,
           loading: false,
@@ -170,14 +161,14 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
 
       const request = buildPlannerRequest(state);
       setState((current) => ({ ...current, loadingLabel: state.planningScene === "weekend_trip" ? "正在生成周末骑行出行方案" : "正在生成今晚骑行建议" }));
-      const result = await createRidePlanStream(request, userProfile, {
+      const result = await createRidePlanStream(request, userProfile, riderState, {
         onStage: (stage) => {
           setState((current) => ({
             ...current,
             stageUpdates: [...current.stageUpdates, stage]
           }));
         }
-      }).catch(async () => createRidePlan(request, userProfile));
+      }).catch(async () => createRidePlan(request, userProfile, riderState));
       setState((current) => ({
         ...current,
         loading: false,
@@ -221,13 +212,8 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
       slotState: {},
       quickReplies: DEFAULT_QUICK_REPLIES,
       inputMode: "natural",
-      structuredConstraints: {
-        ...current.structuredConstraints,
-        available_hours: planningMode === "nearby_trip" ? undefined : current.structuredConstraints.available_hours,
-        duration_bucket: planningMode === "nearby_trip" ? "two_day" : "evening",
-        destination_preferences: planningMode === "nearby_trip" ? ["千岛湖"] : current.structuredConstraints.destination_preferences,
-        return_preference: planningMode === "nearby_trip" ? "public_transport" : current.structuredConstraints.return_preference
-      },
+      targetDate: formatLocalDate(new Date()),
+      structuredConstraints: createEmptyStructuredConstraints(),
       error: null,
       clarificationPrompt: null
     }));
@@ -245,6 +231,20 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
         [field]: field === "available_hours" || field === "target_distance_km" ? parseNumber(String(value)) : value
       }
     }));
+  }
+
+  function setRiderStateField(field: keyof RiderState, value: RiderState[keyof RiderState]) {
+    setState((current) => {
+      const nextRiderState = {
+        ...current.riderState,
+        [field]: field === "last_ride_days_ago" && value !== "" ? Number(value) : value
+      } as RiderState;
+      saveRiderState(nextRiderState);
+      return {
+        ...current,
+        riderState: nextRiderState
+      };
+    });
   }
 
   function detectOriginLocation() {
@@ -282,6 +282,7 @@ export function usePlannerFlow(options?: UsePlannerFlowOptions) {
     setPlanningMode,
     setTargetDate,
     setStructuredField,
+    setRiderStateField,
     detectOriginLocation,
     setQueryFromQuickReply: setQuery,
     submit
@@ -333,4 +334,17 @@ function buildNaturalConversationQuery(state: PlannerState): string {
 function parseNumber(value: string): number | undefined {
   const parsed = Number(value);
   return Number.isFinite(parsed) && value.trim() ? parsed : undefined;
+}
+
+function createEmptyStructuredConstraints(): StructuredConstraints {
+  return {
+    destination_preferences: []
+  };
+}
+
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }

@@ -3,6 +3,8 @@
  * EN: Planner API client wrapping normal requests, SSE streaming, route details, and saved plan reads.
  */
 
+import { type RiderState, type UserProfile } from "../settings/store";
+
 export type RoutePlanCard = {
   go_decision?: string;
   route_name: string;
@@ -79,6 +81,7 @@ export type ChatTurnResponse = {
   missing_slots: string[];
   ready_to_plan: boolean;
   planner_request: PlannerRequest | null;
+  rider_state?: RiderState | null;
   ui_hints: {
     quick_replies?: string[];
     show_advanced_controls?: boolean;
@@ -131,6 +134,41 @@ export type RouteMap = {
   supply_points: SupplyPoint[];
   bailout_options: BailoutOption[];
   climb_segments: ClimbSegment[];
+  template?: {
+    fact_source?: string;
+    route_code?: string;
+    route_name?: string;
+    start_point?: { name?: string | null; longitude?: number | null; latitude?: number | null } | null;
+    end_point?: { name?: string | null; longitude?: number | null; latitude?: number | null } | null;
+    distance_km?: number | null;
+    duration_hours?: number | null;
+    surface_type?: string | null;
+    loop_type?: string | null;
+  } | null;
+  live?: {
+    provider_name?: string;
+    fact_source?: string;
+    start_region?: string | null;
+    user_start_point?: { name?: string | null; longitude?: number | null; latitude?: number | null } | null;
+    polyline?: Array<{ longitude: number; latitude: number }>;
+    direction_summary?: Array<Record<string, unknown>>;
+    road_context?: Record<string, unknown> | null;
+    approach_distance_km?: number | null;
+    approach_duration_hours?: number | null;
+    approach_method?: string | null;
+    start_location?: Record<string, unknown> | null;
+    approach_polyline?: Array<{ longitude: number; latitude: number }>;
+  } | null;
+  resolved?: {
+    provider_name?: string;
+    fact_source?: string;
+    metric_source?: string;
+    distance_km?: number | null;
+    estimated_duration_hours?: number | null;
+    average_speed_kmh?: number | null;
+    total_distance_km?: number | null;
+    total_duration_hours?: number | null;
+  } | null;
 };
 
 export type RiskSummary = {
@@ -176,6 +214,31 @@ export type Roadbook = {
     bailout_count?: number;
     supply_labels?: string[];
     bailout_labels?: string[];
+    fact_source?: string;
+    source_layer?: string;
+    supply_fact_source?: string | null;
+    bailout_fact_source?: string | null;
+    template?: {
+      fact_source?: string;
+      supply_items?: SupplyPoint[];
+      bailout_items?: BailoutOption[];
+    } | null;
+    live?: {
+      provider_name?: string;
+      fact_source?: string;
+      supply_items?: Array<Record<string, unknown>>;
+      bailout_items?: Array<Record<string, unknown>>;
+    } | null;
+    resolved?: {
+      supply_count?: number;
+      bailout_count?: number;
+      supply_labels?: string[];
+      bailout_labels?: string[];
+      fact_source?: string;
+      source_layer?: string;
+      supply_fact_source?: string | null;
+      bailout_fact_source?: string | null;
+    } | null;
   } | null;
   route_context?: {
     provider_name?: string;
@@ -189,6 +252,10 @@ export type Roadbook = {
     average_speed_kmh?: number | null;
     surface_type?: string | null;
     loop_type?: string | null;
+    fact_source?: string;
+    template?: RouteMap["template"];
+    live?: RouteMap["live"];
+    resolved?: RouteMap["resolved"];
   } | null;
 };
 
@@ -255,6 +322,9 @@ export type RidePlanResponse = {
   request_no: string;
   parsed_constraints: Record<string, unknown>;
   input_summary?: InputSummary;
+  rider_profile?: UserProfile | null;
+  rider_state?: RiderState | null;
+  ride_readiness?: RideReadiness | null;
   route_map?: RouteMap | null;
   clarification_prompt: string | null;
   no_match_reason: string | null;
@@ -275,6 +345,15 @@ export type RidePlanResponse = {
   trip_alternatives?: NearbyTripCard[];
   trip_rhythm?: TripRhythm | null;
   trip_risks?: TripRisks | null;
+};
+
+export type RideReadiness = {
+  status: "go" | "light" | "rest";
+  score: number;
+  summary: string;
+  reasons: string[];
+  caution_flags: string[];
+  recommended_intensity: "light" | "steady" | "rest";
 };
 
 export type DecisionSummary = {
@@ -304,6 +383,35 @@ export type NearbyTripCard = {
   lodging_plan?: string | null;
   equipment_advice?: string[];
   weather_window_notes?: string | null;
+  source_meta?: {
+    trip_template?: {
+      trip_no?: string;
+      route_template_id?: string | null;
+      duration_bucket?: string | null;
+    } | null;
+    destination_template?: {
+      destination_no?: string | null;
+      destination_type?: string | null;
+      region_tags?: string[];
+    } | null;
+    route_binding?: {
+      selected_route_code?: string | null;
+      selected_route_name?: string | null;
+      selected_route_source?: string | null;
+      is_template_route_match?: boolean;
+      canonical_route_code?: string | null;
+      canonical_route_feasible?: boolean;
+      canonical_route_rank?: number | null;
+      selected_route_rank?: number | null;
+      feasible_route_count?: number | null;
+      audit_summary?: string | null;
+    } | null;
+    resolved_metrics?: {
+      distance_km?: number | null;
+      ride_duration_hours?: number | null;
+      metric_source?: string | null;
+    } | null;
+  } | null;
 };
 
 export type TripRhythm = {
@@ -331,11 +439,15 @@ type StreamHandlers = {
   onStage?: (stage: PlannerStageUpdate) => void;
 };
 
-export async function preflightRidePlan(request: PlannerRequest, userProfile?: UserProfile): Promise<RidePlanPreflightResponse> {
+export async function preflightRidePlan(
+  request: PlannerRequest,
+  userProfile?: UserProfile,
+  riderState?: RiderState
+): Promise<RidePlanPreflightResponse> {
   const response = await fetch("/api/v1/ride/plan/preflight", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildRidePlanRequest(request, userProfile))
+    body: JSON.stringify(buildRidePlanRequest(request, userProfile, riderState))
   });
 
   if (!response.ok) {
@@ -345,7 +457,11 @@ export async function preflightRidePlan(request: PlannerRequest, userProfile?: U
   return response.json() as Promise<RidePlanPreflightResponse>;
 }
 
-export async function createChatTurn(request: ChatTurnRequest, userProfile?: UserProfile): Promise<ChatTurnResponse> {
+export async function createChatTurn(
+  request: ChatTurnRequest,
+  userProfile?: UserProfile,
+  riderState?: RiderState
+): Promise<ChatTurnResponse> {
   const requestBody: Record<string, unknown> = {
     messages: request.messages,
     planning_scene: request.planning_scene,
@@ -357,6 +473,13 @@ export async function createChatTurn(request: ChatTurnRequest, userProfile?: Use
       fitness_level: userProfile.fitness_level || undefined,
       slope_tolerance: userProfile.slope_tolerance || undefined,
       ride_style_preferences: userProfile.ride_style_preferences
+    };
+  }
+  if (hasRiderState(riderState)) {
+    requestBody.rider_state = {
+      fatigue_level: riderState.fatigue_level || undefined,
+      mood: riderState.mood || undefined,
+      last_ride_days_ago: typeof riderState.last_ride_days_ago === "number" ? riderState.last_ride_days_ago : undefined
     };
   }
   const response = await fetch("/api/v1/ride/chat/turn", {
@@ -372,8 +495,12 @@ export async function createChatTurn(request: ChatTurnRequest, userProfile?: Use
   return response.json() as Promise<ChatTurnResponse>;
 }
 
-export async function createRidePlan(request: PlannerRequest, userProfile?: UserProfile): Promise<RidePlanResponse> {
-  const requestBody = buildRidePlanRequest(request, userProfile);
+export async function createRidePlan(
+  request: PlannerRequest,
+  userProfile?: UserProfile,
+  riderState?: RiderState
+): Promise<RidePlanResponse> {
+  const requestBody = buildRidePlanRequest(request, userProfile, riderState);
   const response = await fetch("/api/v1/ride/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -390,12 +517,13 @@ export async function createRidePlan(request: PlannerRequest, userProfile?: User
 export async function createRidePlanStream(
   request: PlannerRequest,
   userProfile: UserProfile | undefined,
+  riderState: RiderState | undefined,
   handlers?: StreamHandlers
 ): Promise<RidePlanResponse> {
   const response = await fetch("/api/v1/ride/plan/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify(buildRidePlanRequest(request, userProfile))
+    body: JSON.stringify(buildRidePlanRequest(request, userProfile, riderState))
   });
 
   if (!response.ok || !response.body) {
@@ -487,7 +615,11 @@ export async function getRidePlan(requestNo: string): Promise<RidePlanResponse> 
   return response.json() as Promise<RidePlanResponse>;
 }
 
-function buildRidePlanRequest(request: PlannerRequest, userProfile?: UserProfile): Record<string, unknown> {
+function buildRidePlanRequest(
+  request: PlannerRequest,
+  userProfile?: UserProfile,
+  riderState?: RiderState
+): Record<string, unknown> {
   const requestBody: Record<string, unknown> = {
     query: request.query,
     target_date: request.target_date,
@@ -505,7 +637,25 @@ function buildRidePlanRequest(request: PlannerRequest, userProfile?: UserProfile
       ride_style_preferences: userProfile.ride_style_preferences
     };
   }
+  if (hasRiderState(riderState)) {
+    requestBody.rider_state = {
+      fatigue_level: riderState.fatigue_level || undefined,
+      mood: riderState.mood || undefined,
+      last_ride_days_ago: typeof riderState.last_ride_days_ago === "number" ? riderState.last_ride_days_ago : undefined
+    };
+  }
   return requestBody;
+}
+
+function hasRiderState(riderState?: RiderState): riderState is RiderState {
+  if (!riderState) {
+    return false;
+  }
+  return Boolean(
+    riderState.fatigue_level ||
+      riderState.mood ||
+      typeof riderState.last_ride_days_ago === "number"
+  );
 }
 
 function parseSseEvent(block: string): { event: string; data: unknown } | null {
@@ -522,5 +672,3 @@ function parseSseEvent(block: string): { event: string; data: unknown } | null {
     data: JSON.parse(dataLines.map((line) => line.replace("data: ", "")).join("\n"))
   };
 }
-
-import type { UserProfile } from "../settings/store";

@@ -33,6 +33,9 @@ def test_local_route_provider_estimates_known_user_start_approach() -> None:
     assert context["approach_duration_hours"] is not None
     assert context["total_distance_km"] > context["template_distance_km"]
     assert context["total_duration_hours"] > context["template_duration_hours"]
+    assert context["template"]["distance_km"] == 42.0
+    assert context["live"]["fact_source"] == "local-approach"
+    assert context["resolved"]["metric_source"] == "template-plus-approach"
     assert "fallback_reason" not in context
 
 
@@ -114,6 +117,9 @@ def test_amap_route_provider_normalizes_reverse_geocode_and_direction() -> None:
     assert context["road_context"]["road_name"] == "闻涛路"
     assert context["distance_km"] == 42.0
     assert context["total_distance_km"] == 42.0
+    assert context["template"]["route_code"] == "HZ-RIVER-001"
+    assert context["live"]["fact_source"] == "amap"
+    assert context["resolved"]["metric_source"] == "template-plus-live"
     assert context["polyline"] == [
         {"longitude": 120.2103, "latitude": 30.2064},
         {"longitude": 120.22, "latitude": 30.22},
@@ -198,6 +204,8 @@ def test_amap_route_provider_adds_user_start_approach_to_template_route() -> Non
     assert context["template_duration_hours"] == 2.8
     assert context["total_distance_km"] == 50.0
     assert context["total_duration_hours"] == 3.3
+    assert context["live"]["approach_distance_km"] == 8.0
+    assert context["resolved"]["total_distance_km"] == 50.0
 
 
 def test_amap_route_provider_get_cycling_path_falls_back_to_endpoint_polyline_when_rides_empty() -> None:

@@ -17,7 +17,8 @@ def get_default_user_profile(database_url: str) -> dict | None:
     with connect(database_url) as connection:
         row = connection.execute(
             """
-            SELECT id, uid, nickname, home_region, fitness_level, ride_style_preferences_json, slope_tolerance
+            SELECT id, uid, nickname, home_region, bike_type, experience_level, riding_goal,
+                   fitness_level, ride_style_preferences_json, slope_tolerance
             FROM user_profiles
             WHERE uid = ?
             """,
@@ -30,6 +31,9 @@ def get_default_user_profile(database_url: str) -> dict | None:
         "uid": row["uid"],
         "nickname": row["nickname"],
         "home_region": row["home_region"],
+        "bike_type": row["bike_type"],
+        "experience_level": row["experience_level"],
+        "riding_goal": row["riding_goal"],
         "fitness_level": row["fitness_level"],
         "ride_style_preferences": json.loads(row["ride_style_preferences_json"]),
         "slope_tolerance": row["slope_tolerance"],
@@ -43,6 +47,9 @@ def save_default_user_profile(database_url: str, payload: dict) -> dict:
         "uid": DEFAULT_UID,
         "nickname": payload.get("nickname"),
         "home_region": payload.get("home_region"),
+        "bike_type": payload.get("bike_type"),
+        "experience_level": payload.get("experience_level"),
+        "riding_goal": payload.get("riding_goal"),
         "fitness_level": payload.get("fitness_level"),
         "ride_style_preferences": payload.get("ride_style_preferences", []),
         "slope_tolerance": payload.get("slope_tolerance"),
@@ -51,12 +58,16 @@ def save_default_user_profile(database_url: str, payload: dict) -> dict:
         connection.execute(
             """
             INSERT INTO user_profiles (
-                id, uid, nickname, home_region, fitness_level, ride_style_preferences_json, slope_tolerance
+                id, uid, nickname, home_region, bike_type, experience_level, riding_goal,
+                fitness_level, ride_style_preferences_json, slope_tolerance
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(uid) DO UPDATE SET
                 nickname = excluded.nickname,
                 home_region = excluded.home_region,
+                bike_type = excluded.bike_type,
+                experience_level = excluded.experience_level,
+                riding_goal = excluded.riding_goal,
                 fitness_level = excluded.fitness_level,
                 ride_style_preferences_json = excluded.ride_style_preferences_json,
                 slope_tolerance = excluded.slope_tolerance,
@@ -67,6 +78,9 @@ def save_default_user_profile(database_url: str, payload: dict) -> dict:
                 normalized["uid"],
                 normalized["nickname"],
                 normalized["home_region"],
+                normalized["bike_type"],
+                normalized["experience_level"],
+                normalized["riding_goal"],
                 normalized["fitness_level"],
                 json.dumps(normalized["ride_style_preferences"], ensure_ascii=False),
                 normalized["slope_tolerance"],

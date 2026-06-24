@@ -46,6 +46,32 @@ def test_ride_plan_request_accepts_scene_location_and_weekend_constraints() -> N
     assert payload.structured_constraints.overnight_preference == "required"
 
 
+def test_ride_plan_request_accepts_rider_profile_and_state() -> None:
+    payload = RidePlanRequestSchema(
+        query="今晚从闻涛路出发骑 2 小时",
+        target_date=date(2026, 6, 6),
+        user_profile={
+            "bike_type": "road",
+            "experience_level": "casual",
+            "riding_goal": "relax",
+            "fitness_level": "medium",
+            "slope_tolerance": "avoid",
+        },
+        rider_state={
+            "fatigue_level": "tired",
+            "mood": "recover",
+            "last_ride_days_ago": 0,
+        },
+    )
+
+    assert payload.user_profile is not None
+    assert payload.user_profile.bike_type == "road"
+    assert payload.user_profile.experience_level == "casual"
+    assert payload.rider_state is not None
+    assert payload.rider_state.fatigue_level == "tired"
+    assert payload.rider_state.last_ride_days_ago == 0
+
+
 def test_ride_plan_request_accepts_city_ride_evening_duration() -> None:
     payload = RidePlanRequestSchema(
         query="我今天晚上想出去骑行一下",

@@ -105,6 +105,32 @@ def test_companion_plan_persists_editorial_result_and_route_detail(tmp_path, mon
     assert detail_payload["tags"]
 
 
+def test_companion_plan_forwards_target_date_and_user_profile_to_planner(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CYCLING_AGENT_DATABASE_URL", f"sqlite:///{tmp_path / 'cycling-agent.db'}")
+    client = TestClient(create_app(weather_provider=StubWeatherProvider()))
+
+    response = client.post(
+        "/api/v1/experience/companion/plan",
+        json={
+            "message": "我在闻涛路滨江段，想骑10公里",
+            "target_date": "2026-06-08",
+            "user_profile": {"fitness_level": "medium", "slope_tolerance": "avoid"},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    result_response = client.get(f"/api/v1/experience/results/{payload['request_no']}")
+    assert result_response.status_code == 200
+
+    plan_response = client.get(f"/api/v1/ride/plan/{payload['request_no']}")
+    assert plan_response.status_code == 200
+    plan_payload = plan_response.json()
+    assert plan_payload["parsed_constraints"]["fitness_level"] == "medium"
+    assert plan_payload["parsed_constraints"]["slope_tolerance"] == "avoid"
+    assert plan_payload["weather_snapshot"]["forecast_date"] == "2026-06-08"
+
+
 def test_lifestyle_profile_can_be_saved_and_loaded(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("CYCLING_AGENT_DATABASE_URL", f"sqlite:///{tmp_path / 'cycling-agent.db'}")
     client = TestClient(create_app())

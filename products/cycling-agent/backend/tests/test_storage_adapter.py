@@ -5,6 +5,8 @@ EN: Backend test file covering APIs, services, repositories, providers, cache, a
 import sys
 import types
 
+import pytest
+
 from app.core.storage import _translate_query_for_postgres, connect, database_kind, init_storage
 
 
@@ -42,9 +44,10 @@ class FakeConnection:
         self.close_called = True
 
 
-def test_database_kind_supports_sqlite_and_postgres() -> None:
-    assert database_kind("sqlite:///./cycling-agent.db") == "sqlite"
+def test_database_kind_accepts_only_postgres_urls() -> None:
     assert database_kind("postgresql://user:pass@localhost:5432/cycling_agent") == "postgres"
+    with pytest.raises(ValueError):
+        database_kind("sqlite:///./cycling-agent.db")
 
 
 def test_translate_query_for_postgres_rewrites_placeholders() -> None:
@@ -79,3 +82,5 @@ def test_init_storage_runs_postgres_ddl(monkeypatch) -> None:
 
     assert any("CREATE TABLE IF NOT EXISTS ride_plans" in query for query, _ in fake_connection.cursor_obj.executed)
     assert any("BIGSERIAL PRIMARY KEY" in query for query, _ in fake_connection.cursor_obj.executed)
+    assert any("CREATE TABLE IF NOT EXISTS completed_rides" in query for query, _ in fake_connection.cursor_obj.executed)
+    assert any("CREATE TABLE IF NOT EXISTS post_ride_shares" in query for query, _ in fake_connection.cursor_obj.executed)

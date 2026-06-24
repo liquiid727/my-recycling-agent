@@ -16,14 +16,20 @@ test("renders the planner page shell with chat-first planner affordances", () =>
   expect(screen.getByRole("heading", { name: /把路线咨询主流程接回当前产品界面/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "开始规划" })).toBeInTheDocument();
   expect(screen.getByPlaceholderText("比如：我在闻涛路滨江段，今晚想轻松骑 2 小时，最好有江边和咖啡。")).toBeInTheDocument();
+  expect(screen.getByLabelText("身体状态")).toBeInTheDocument();
+  expect(screen.getByLabelText("这次想怎么骑")).toBeInTheDocument();
+  expect(screen.getByLabelText("上次骑行")).toBeInTheDocument();
 });
 
 test("submits through the original ride chat and ride plan flow", async () => {
   const user = userEvent.setup();
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  let chatTurnBody: Record<string, unknown> | null = null;
+  let ridePlanBody: Record<string, unknown> | null = null;
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
 
     if (url === "/api/v1/ride/chat/turn") {
+      chatTurnBody = init?.body ? JSON.parse(String(init.body)) : null;
       return {
         ok: true,
         json: async () => ({
@@ -59,6 +65,7 @@ test("submits through the original ride chat and ride plan flow", async () => {
     }
 
     if (url === "/api/v1/ride/plan") {
+      ridePlanBody = init?.body ? JSON.parse(String(init.body)) : null;
       return {
         ok: true,
         json: async () => ({
@@ -125,9 +132,22 @@ test("submits through the original ride chat and ride plan flow", async () => {
     </MemoryRouter>,
   );
 
+  await user.selectOptions(screen.getByLabelText("身体状态"), "tired");
+  await user.selectOptions(screen.getByLabelText("这次想怎么骑"), "recover");
+  await user.selectOptions(screen.getByLabelText("上次骑行"), "1");
   await user.click(screen.getByRole("button", { name: "开始规划" }));
 
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/v1/ride/chat/turn", expect.objectContaining({ method: "POST" })));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/v1/ride/plan", expect.objectContaining({ method: "POST" })));
+  expect((chatTurnBody as { rider_state?: unknown } | null)?.rider_state).toEqual({
+    fatigue_level: "tired",
+    mood: "recover",
+    last_ride_days_ago: 1,
+  });
+  expect((ridePlanBody as { rider_state?: unknown } | null)?.rider_state).toEqual({
+    fatigue_level: "tired",
+    mood: "recover",
+    last_ride_days_ago: 1,
+  });
   expect(await screen.findByText("闻涛路-江边咖啡轻松环线")).toBeInTheDocument();
 });

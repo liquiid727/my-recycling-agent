@@ -47,3 +47,6 @@ def test_amap_poi_provider_normalizes_supply_labels() -> None:
     assert context["provider_name"] == "amap-poi"
     assert context["poi_summary"]["supply_count"] == 2
     assert context["poi_summary"]["supply_labels"][0] == "江边便利店(便利店)"
+    assert context["poi_summary"]["source_layer"] == "mixed"
+    assert context["poi_summary"]["template"]["bailout_items"][0]["name"] == "奥体中途折返"
+    assert context["poi_summary"]["live"]["supply_items"][0]["name"] == "江边便利店"

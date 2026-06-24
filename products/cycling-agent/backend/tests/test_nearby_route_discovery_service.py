@@ -114,6 +114,9 @@ def test_discover_nearby_route_candidates_builds_dynamic_out_and_back_route() ->
     assert route["route_context"]["fact_source"] == "amap-dynamic"
     assert route["route_context"]["total_distance_km"] == 12.4
     assert route["route_context"]["total_duration_hours"] == 0.84
+    assert route["route_context"]["template"] is None
+    assert route["route_context"]["live"]["fact_source"] == "amap-dynamic"
+    assert route["route_context"]["resolved"]["metric_source"] == "dynamic-live"
 
 
 def test_discover_nearby_route_candidates_expands_short_anchors_into_multi_anchor_loop() -> None:
@@ -130,4 +133,6 @@ def test_discover_nearby_route_candidates_expands_short_anchors_into_multi_ancho
     assert routes[0]["estimated_duration_hours"] == 0.94
     assert routes[0]["route_context"]["loop_type"] == "multi_anchor_loop"
     assert routes[0]["route_context"]["total_distance_km"] == 14.8
+    assert routes[0]["route_context"]["template"] is None
+    assert routes[0]["route_context"]["resolved"]["total_distance_km"] == 14.8
     assert "dynamic-route-shorter-than-plan" not in routes[0]["constraint_warnings"]

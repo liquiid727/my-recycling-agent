@@ -9,7 +9,14 @@ export type UserProfile = {
   ride_style_preferences: string[];
 };
 
+export type RiderState = {
+  fatigue_level: "fresh" | "normal" | "tired" | "";
+  mood: "relax" | "exercise" | "explore" | "social" | "recover" | "";
+  last_ride_days_ago: number | "";
+};
+
 const STORAGE_KEY = "cycling-agent-user-profile";
+const RIDER_STATE_STORAGE_KEY = "cycling-agent-rider-state";
 
 export function loadUserProfile(): UserProfile {
   const storage = getStorage();
@@ -34,6 +41,32 @@ export function loadUserProfile(): UserProfile {
   }
 }
 
+export function loadRiderState(): RiderState {
+  const storage = getStorage();
+  if (!storage) {
+    return emptyRiderState();
+  }
+
+  const raw = storage.getItem(RIDER_STATE_STORAGE_KEY);
+  if (!raw) {
+    return emptyRiderState();
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<RiderState>;
+    return {
+      fatigue_level: parsed.fatigue_level ?? "",
+      mood: parsed.mood ?? "",
+      last_ride_days_ago:
+        typeof parsed.last_ride_days_ago === "number" && Number.isFinite(parsed.last_ride_days_ago) && parsed.last_ride_days_ago >= 0
+          ? parsed.last_ride_days_ago
+          : ""
+    };
+  } catch {
+    return emptyRiderState();
+  }
+}
+
 
 export function saveUserProfile(profile: UserProfile): void {
   const storage = getStorage();
@@ -41,6 +74,14 @@ export function saveUserProfile(profile: UserProfile): void {
     return;
   }
   storage.setItem(STORAGE_KEY, JSON.stringify(profile));
+}
+
+export function saveRiderState(state: RiderState): void {
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+  storage.setItem(RIDER_STATE_STORAGE_KEY, JSON.stringify(state));
 }
 
 
@@ -84,6 +125,14 @@ function emptyUserProfile(): UserProfile {
     fitness_level: "",
     slope_tolerance: "",
     ride_style_preferences: []
+  };
+}
+
+function emptyRiderState(): RiderState {
+  return {
+    fatigue_level: "",
+    mood: "",
+    last_ride_days_ago: ""
   };
 }
 

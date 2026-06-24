@@ -59,7 +59,12 @@ def test_nearby_trip_plan_returns_primary_trip_alternatives_rhythm_and_return_op
     assert body["recommended_trip"]["total_duration_hours"] <= 5
     assert body["recommended_trip"]["stay_suggestion"]
     assert body["recommended_trip"]["return_options"]
+    assert body["recommended_trip"]["source_meta"]["route_binding"]["selected_route_code"]
+    assert body["recommended_trip"]["source_meta"]["route_binding"]["audit_summary"]
+    assert body["recommended_trip"]["source_meta"]["resolved_metrics"]["metric_source"]
     assert len(body["trip_alternatives"]) >= 1
+    assert any(item["stage_name"] == "trip_route_candidates" for item in body["tool_trace"])
+    assert any(item["stage_name"] == "trip_binding_audit" for item in body["tool_trace"])
     assert body["trip_rhythm"]["segments"][0]["stage"] == "出发前准备"
     assert any("天气风险" in item for item in body["trip_risks"]["risk_items"])
     assert any("返程风险" in item for item in body["trip_risks"]["risk_items"])
@@ -124,5 +129,6 @@ def test_weekend_trip_plan_returns_lodging_equipment_and_weather_window(tmp_path
     assert body["recommended_trip"]["lodging_plan"]
     assert body["recommended_trip"]["equipment_advice"]
     assert body["recommended_trip"]["weather_window_notes"]
+    assert body["recommended_trip"]["source_meta"]["trip_template"]["duration_bucket"] == "two_day"
     assert body["decision_summary"]["scene"] == "weekend_trip"
     assert any("住宿" in item for item in body["decision_summary"]["confidence_notes"])

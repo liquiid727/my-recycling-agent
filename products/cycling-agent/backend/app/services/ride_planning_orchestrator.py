@@ -26,11 +26,13 @@ from app.services.city_strategy_service import (
     apply_city_strategy_to_risk,
 )
 from app.services.roadbook_service import build_equipment_advice, build_roadbook
+from app.services.ride_readiness_service import build_ride_readiness
 from app.services.nearby_trip_planner import (
     build_nearby_trip_card,
     build_trip_rhythm,
     build_trip_risks,
     rank_nearby_trip_candidates,
+    rank_nearby_trip_route_candidates,
 )
 from app.services.nearby_route_discovery_service import discover_nearby_route_candidates
 from app.services.risk_scoring_service import score_route_risk
@@ -102,11 +104,13 @@ def build_demo_plan(
     stage_tracer: StageTracer | None = None,
 ) -> dict:
     request_no = generate_business_no("RQ")
-    user_profile = payload.user_profile.model_dump() if payload.user_profile else {}
+    rider_profile = payload.user_profile.model_dump() if payload.user_profile else {}
+    rider_state = payload.rider_state.model_dump() if payload.rider_state else {}
     fallback_reason: list[str] = []
     tool_trace: list[dict] = []
-    constraints = _resolve_parsed_constraints(payload.query, user_profile, llm_provider, fallback_reason, tool_trace, stage_tracer)
-    constraints = _merge_structured_constraints(payload, constraints, user_profile)
+    # 编排入口先把“解析后的约束”稳定下来，后续天气、路线、风险、路书都只消费这一份输入。
+    constraints = _resolve_parsed_constraints(payload.query, rider_profile, llm_provider, fallback_reason, tool_trace, stage_tracer)
+    constraints = _merge_structured_constraints(payload, constraints, rider_profile)
     constraints["planning_mode"] = payload.planning_mode
     constraints["planning_scene"] = payload.planning_scene or constraints.get("planning_scene") or (
         "weekend_trip" if payload.planning_mode == "nearby_trip" else "city_ride"
@@ -124,12 +128,23 @@ def build_demo_plan(
         tool_trace=tool_trace,
         stage_tracer=stage_tracer,
     )
+    ride_readiness = build_ride_readiness(
+        planning_scene=constraints.get("planning_scene", "city_ride"),
+        weather_snapshot=weather_snapshot,
+        constraints=constraints,
+        rider_profile=rider_profile,
+        rider_state=rider_state,
+    )
     if payload.planning_mode == "nearby_trip":
+        # 周边出游和城市短骑共享解析/天气链路，但在候选生成与结果结构上分成两条编排分支。
         return _build_nearby_trip_plan(
             payload=payload,
             request_no=request_no,
             constraints=constraints,
-            user_profile=user_profile,
+            user_profile=rider_profile,
+            rider_profile=rider_profile,
+            rider_state=rider_state,
+            ride_readiness=ride_readiness,
             clarification_prompt=clarification_prompt,
             weather_snapshot=weather_snapshot,
             fallback_reason=fallback_reason,
@@ -177,7 +192,7 @@ def build_demo_plan(
     for route in ranked_routes:
         poi_context = _resolve_poi_context(route, poi_provider, fallback_reason, tool_trace, stage_tracer)
         route["poi_summary"] = poi_context["poi_summary"]
-        risk = score_route_risk(route, weather_snapshot, user_profile, risk_rules)
+        risk = score_route_risk(route, weather_snapshot, rider_profile, risk_rules)
         risk = apply_city_strategy_to_risk(route, weather_snapshot, risk, strategy_rules)
         _record_stage(
             tool_trace,
@@ -221,6 +236,10 @@ def build_demo_plan(
         }
     )
     recommended = enriched_routes[0]
+    recommended["card"]["go_decision"] = _apply_readiness_to_go_decision(
+        recommended["card"]["go_decision"],
+        ride_readiness,
+    )
     alternatives = [item["card"] for item in enriched_routes[1:4]]
     roadbook = {
         **_resolve_roadbook(
@@ -243,6 +262,9 @@ def build_demo_plan(
         "planning_mode": "route",
         "parsed_constraints": constraints,
         "input_summary": _build_input_summary(payload, constraints),
+        "rider_profile": rider_profile or None,
+        "rider_state": rider_state or None,
+        "ride_readiness": ride_readiness,
         "clarification_prompt": clarification_prompt,
         "no_match_reason": None,
         "recommended_plan": recommended["card"],
@@ -257,6 +279,7 @@ def build_demo_plan(
             risk=recommended["risk"],
             weather_snapshot=weather_snapshot,
             constraints=constraints,
+            ride_readiness=ride_readiness,
             status="success",
         ),
         "route_map": _build_route_map(recommended["route"]),
@@ -285,14 +308,29 @@ def _build_no_match_response(
     fallback_reason: list[str],
     tool_trace: list[dict],
 ) -> dict:
+    if payload.planning_mode == "nearby_trip":
+        no_match_reason = "当前没有匹配的周末方案，系统没有强行套用既有 trip 模板。"
+        summary_reason = "当前没有匹配的周末方案，系统没有强行套用既有 trip 模板。"
+    else:
+        no_match_reason = "动态路线暂时没有可执行候选，未使用固定模板生成本次推荐。"
+        summary_reason = "动态路线暂时没有可用候选，未使用固定模板生成本次推荐。"
     return {
         "status": "no_match",
         "planning_mode": payload.planning_mode,
         "request_no": request_no,
         "parsed_constraints": constraints,
         "input_summary": _build_input_summary(payload, constraints),
+        "rider_profile": payload.user_profile.model_dump() if payload.user_profile else None,
+        "rider_state": payload.rider_state.model_dump() if payload.rider_state else None,
+        "ride_readiness": build_ride_readiness(
+            planning_scene=constraints.get("planning_scene") or ("weekend_trip" if payload.planning_mode == "nearby_trip" else "city_ride"),
+            weather_snapshot=weather_snapshot,
+            constraints=constraints,
+            rider_profile=payload.user_profile.model_dump() if payload.user_profile else None,
+            rider_state=payload.rider_state.model_dump() if payload.rider_state else None,
+        ),
         "clarification_prompt": clarification_prompt,
-        "no_match_reason": "动态路线暂时没有可执行候选，未使用固定模板生成本次推荐。",
+        "no_match_reason": no_match_reason,
         "recommended_plan": {
             "go_decision": "no_go",
             "route_name": "当前没有合适路线",
@@ -301,7 +339,7 @@ def _build_no_match_response(
             "elevation_gain_m": 0.0,
             "estimated_duration_hours": 0.0,
             "risk_level": "unknown",
-            "summary_reason": "动态路线暂时没有可用候选，未使用固定模板生成本次推荐。",
+            "summary_reason": summary_reason,
         },
         "alternatives": [],
         "weather_snapshot": weather_snapshot,
@@ -313,12 +351,19 @@ def _build_no_match_response(
                 "go_decision": "no_go",
                 "route_name": "当前没有合适路线",
                 "risk_level": "unknown",
-                "summary_reason": "动态路线暂时没有可用候选，未使用固定模板生成本次推荐。",
+                "summary_reason": summary_reason,
             },
             route={},
             risk={"risk_level": "high"},
             weather_snapshot=weather_snapshot,
             constraints=constraints,
+            ride_readiness=build_ride_readiness(
+                planning_scene=constraints.get("planning_scene") or ("weekend_trip" if payload.planning_mode == "nearby_trip" else "city_ride"),
+                weather_snapshot=weather_snapshot,
+                constraints=constraints,
+                rider_profile=payload.user_profile.model_dump() if payload.user_profile else None,
+                rider_state=payload.rider_state.model_dump() if payload.rider_state else None,
+            ),
             status="no_match",
         ),
         "route_map": None,
@@ -385,6 +430,7 @@ def _discover_dynamic_city_routes(
         return []
 
     try:
+        # 动态候选发现是城市短骑的核心入口；一旦失败，本轮直接返回 no_match，不再伪造固定模板推荐。
         routes = discover_nearby_route_candidates(
             constraints=constraints,
             city_code=payload.city_code,
@@ -417,6 +463,8 @@ def _discover_dynamic_city_routes(
             "fallback_reason": None if routes else "nearby-route-discovery-empty",
         },
     )
+    for route in routes:
+        route["route_context"] = _normalize_route_context(route, route.get("route_context"), constraints)
     return routes
 
 
@@ -443,6 +491,8 @@ def _merge_structured_constraints(payload: RidePlanRequestSchema, parsed_constra
 
 
 def _build_input_summary(payload: RidePlanRequestSchema, constraints: dict) -> dict:
+    rider_profile = payload.user_profile.model_dump() if payload.user_profile else {}
+    rider_state = payload.rider_state.model_dump() if payload.rider_state else {}
     summary = {
         "input_mode": payload.input_mode,
         "target_date": payload.target_date.isoformat(),
@@ -456,6 +506,12 @@ def _build_input_summary(payload: RidePlanRequestSchema, constraints: dict) -> d
         "ride_style": constraints.get("ride_style"),
         "slope_tolerance": constraints.get("slope_tolerance"),
         "priority": constraints.get("priority"),
+        "bike_type": rider_profile.get("bike_type"),
+        "experience_level": rider_profile.get("experience_level"),
+        "riding_goal": rider_profile.get("riding_goal"),
+        "fatigue_level": rider_state.get("fatigue_level"),
+        "mood": rider_state.get("mood"),
+        "last_ride_days_ago": rider_state.get("last_ride_days_ago"),
         "defaults_applied": constraints.get("defaults_applied", []),
     }
     if constraints.get("planning_scene"):
@@ -480,6 +536,7 @@ def _build_decision_summary(
     risk: dict,
     weather_snapshot: dict,
     constraints: dict,
+    ride_readiness: dict | None,
     status: str,
 ) -> dict:
     go_decision = primary_card.get("go_decision") or ("no_go" if status == "no_match" else "go")
@@ -498,6 +555,11 @@ def _build_decision_summary(
         "caution": "这次可以谨慎骑，建议保留缩短方案",
         "no_go": "这次不建议按原计划骑",
     }
+    readiness = ride_readiness or {}
+    if readiness.get("status") == "rest":
+        go_decision = "no_go"
+    elif readiness.get("status") == "light" and go_decision == "go":
+        go_decision = "caution"
     decision_reason = primary_card.get("summary_reason") or "结合路线匹配、天气和风险后的推荐结论。"
     confidence_notes = [
         f"风险等级：{risk.get('risk_level', primary_card.get('risk_level', 'unknown'))}",
@@ -516,24 +578,27 @@ def _build_decision_summary(
 
 
 def _build_route_map(route: dict) -> dict:
-    route_context = route.get("route_context") or {}
-    template_start_point = route_context.get("template_start_point") or {
+    route_context = _normalize_route_context(route, route.get("route_context") or {})
+    template_layer = route_context.get("template")
+    live_layer = route_context.get("live") or {}
+    resolved_layer = route_context.get("resolved") or {}
+    template_start_point = (template_layer or {}).get("start_point") or route_context.get("template_start_point") or {
         "name": route.get("start_point_name"),
         "longitude": route.get("start_point_lng"),
         "latitude": route.get("start_point_lat"),
     }
-    user_start_point = route_context.get("user_start_point") or template_start_point
+    user_start_point = live_layer.get("user_start_point") or route_context.get("user_start_point") or template_start_point
     end_point = {
         "name": route.get("end_point_name") or route.get("start_point_name"),
         "longitude": route.get("end_point_lng") or route.get("start_point_lng"),
         "latitude": route.get("end_point_lat") or route.get("start_point_lat"),
     }
-    polyline = route_context.get("polyline") or []
+    polyline = live_layer.get("polyline") or route_context.get("polyline") or []
     return {
         "route_code": route["route_code"],
         "route_name": route["name"],
-        "provider_name": route_context.get("provider_name", "template-only"),
-        "fact_source": route_context.get("fact_source", "template"),
+        "provider_name": live_layer.get("provider_name") or route_context.get("provider_name", "template-only"),
+        "fact_source": resolved_layer.get("fact_source") or route_context.get("fact_source", "template"),
         "polyline": polyline,
         "polyline_available": bool(polyline),
         "fallback_reason": None if polyline else "route-polyline-unavailable",
@@ -541,8 +606,8 @@ def _build_route_map(route: dict) -> dict:
         "user_start_point": user_start_point,
         "template_start_point": template_start_point,
         "end_point": end_point,
-        "approach_distance_km": route_context.get("approach_distance_km"),
-        "approach_duration_hours": route_context.get("approach_duration_hours"),
+        "approach_distance_km": live_layer.get("approach_distance_km", route_context.get("approach_distance_km")),
+        "approach_duration_hours": live_layer.get("approach_duration_hours", route_context.get("approach_duration_hours")),
         "template_distance_km": route_context.get("template_distance_km") or route.get("distance_km"),
         "template_duration_hours": route_context.get("template_duration_hours") or route.get("estimated_duration_hours"),
         "total_distance_km": route_context.get("total_distance_km") or route_context.get("distance_km") or route.get("distance_km"),
@@ -550,6 +615,9 @@ def _build_route_map(route: dict) -> dict:
         "supply_points": route.get("supply_points", []),
         "bailout_options": route.get("bailout_options", []),
         "climb_segments": route.get("climb_segments", []),
+        "template": template_layer,
+        "live": live_layer or None,
+        "resolved": resolved_layer,
     }
 
 
@@ -559,6 +627,9 @@ def _build_nearby_trip_plan(
     request_no: str,
     constraints: dict,
     user_profile: dict,
+    rider_profile: dict,
+    rider_state: dict,
+    ride_readiness: dict,
     clarification_prompt: str | None,
     weather_snapshot: dict,
     fallback_reason: list[str],
@@ -579,10 +650,33 @@ def _build_nearby_trip_plan(
     )
     destinations = nearby_destinations or _load_json_list(NEARBY_DESTINATIONS_SEED_PATH)
     trips = trip_templates or _load_json_list(TRIP_TEMPLATES_SEED_PATH)
+    route_candidates = rank_nearby_trip_route_candidates(routes=routes, constraints=constraints)
+    _record_stage(
+        tool_trace,
+        stage_tracer,
+        {
+            "stage_name": "trip_route_candidates",
+            "status": "success" if route_candidates else "fallback",
+            "provider_name": "route-template-library",
+            "summary": f"Selected {len(route_candidates)} feasible route candidates before matching weekend trip skeletons.",
+            "fallback_reason": None if route_candidates else "nearby-trip-route-candidate-empty",
+        },
+    )
+    if not route_candidates:
+        _append_unique(fallback_reason, "nearby-trip-route-candidate-empty")
+        return _build_no_match_response(
+            payload,
+            request_no,
+            constraints,
+            clarification_prompt,
+            weather_snapshot,
+            fallback_reason,
+            tool_trace,
+        )
     ranked_trips = rank_nearby_trip_candidates(
         trips=trips,
         destinations=destinations,
-        routes=routes,
+        route_candidates=route_candidates,
         constraints=constraints,
         weather_snapshot=weather_snapshot,
         user_profile=user_profile,
@@ -595,11 +689,12 @@ def _build_nearby_trip_plan(
             "stage_name": "trip_planner",
             "status": "success" if ranked_trips else "fallback",
             "provider_name": "trip-template-library",
-            "summary": f"Matched {len(ranked_trips)} nearby trip candidates from Hangzhou templates.",
+            "summary": f"Matched {len(ranked_trips)} nearby trip candidates by combining feasible routes with weekend trip skeletons.",
             "fallback_reason": None if ranked_trips else "nearby-trip-candidate-empty",
         },
     )
     if not ranked_trips:
+        _append_unique(fallback_reason, "nearby-trip-candidate-empty")
         return _build_no_match_response(
             payload,
             request_no,
@@ -618,6 +713,7 @@ def _build_nearby_trip_plan(
         recommended["risk"],
         summary_reason=recommended_card["why_recommended"],
     )
+    route_card["go_decision"] = _apply_readiness_to_go_decision(route_card["go_decision"], ride_readiness)
     trip_rhythm = build_trip_rhythm(recommended, departure_time=constraints.get("departure_time"))
     trip_risks = build_trip_risks(recommended, weather_snapshot)
     _record_stage(
@@ -628,6 +724,17 @@ def _build_nearby_trip_plan(
             "status": "success",
             "provider_name": "rule-engine",
             "summary": f"Ranked {len(ranked_trips)} nearby trip candidates and selected primary trip.",
+            "fallback_reason": None,
+        },
+    )
+    _record_stage(
+        tool_trace,
+        stage_tracer,
+        {
+            "stage_name": "trip_binding_audit",
+            "status": "success",
+            "provider_name": "trip-template-library",
+            "summary": ((recommended.get("binding_audit") or {}).get("summary") or "Trip binding audit unavailable."),
             "fallback_reason": None,
         },
     )
@@ -648,6 +755,9 @@ def _build_nearby_trip_plan(
         "planning_mode": "nearby_trip",
         "parsed_constraints": constraints,
         "input_summary": _build_input_summary(payload, constraints),
+        "rider_profile": rider_profile or None,
+        "rider_state": rider_state or None,
+        "ride_readiness": ride_readiness,
         "clarification_prompt": clarification_prompt,
         "no_match_reason": None,
         "recommended_plan": route_card,
@@ -659,7 +769,7 @@ def _build_nearby_trip_plan(
         "weather_snapshot": weather_snapshot,
         "fallback_reason": fallback_reason,
         "tool_trace": tool_trace,
-        "decision_summary": _build_trip_decision_summary(recommended_card, recommended, trip_risks, constraints, weather_snapshot),
+        "decision_summary": _build_trip_decision_summary(recommended_card, recommended, trip_risks, constraints, weather_snapshot, ride_readiness),
         "route_map": _build_route_map(recommended["route"]),
         "roadbook": {
             "departure_window": recommended_card["recommended_departure_time"],
@@ -670,14 +780,18 @@ def _build_nearby_trip_plan(
             "route_notes": recommended["route"].get("route_notes"),
             "risk_summary": recommended["risk"],
             "backup_plan": trip_risks["fallback_plan"],
+            "route_context": recommended["route"].get("route_context"),
+            "poi_summary": recommended["route"].get("poi_summary"),
         },
         "_audit": {
+            "trip_binding": recommended.get("binding_audit"),
             "candidate_assessments": [
                 {
                     "route_code": item["route"]["route_code"],
-                    "route_name": item["trip"]["name"],
+                    "route_name": item["route"]["name"],
                     "recommendation_score": item["score"],
                     "risk": item["risk"],
+                    "binding_audit": item.get("binding_audit"),
                     "card": _build_route_card(item["route"], item["risk"], build_nearby_trip_card(item)["why_recommended"]),
                 }
                 for item in ranked_trips
@@ -686,25 +800,44 @@ def _build_nearby_trip_plan(
     }
 
 
-def _build_trip_decision_summary(recommended_card: dict, candidate: dict, trip_risks: dict, constraints: dict, weather_snapshot: dict) -> dict:
+def _build_trip_decision_summary(
+    recommended_card: dict,
+    candidate: dict,
+    trip_risks: dict,
+    constraints: dict,
+    weather_snapshot: dict,
+    ride_readiness: dict | None,
+) -> dict:
     lodging_plan = recommended_card.get("lodging_plan")
     confidence_notes = [
         f"目的地：{recommended_card['destination_name']}",
         f"出行时长：{recommended_card.get('duration_bucket') or constraints.get('duration_bucket')}",
         f"天气：{weather_snapshot.get('weather_summary', 'unknown')}",
     ]
+    readiness = ride_readiness or {}
     if lodging_plan:
         confidence_notes.append(f"住宿：{lodging_plan}")
     if recommended_card.get("weather_window_notes"):
         confidence_notes.append(f"天气窗口：{recommended_card['weather_window_notes']}")
+    go_decision = "caution" if candidate["risk"].get("risk_level") == "medium" else "go" if candidate["risk"].get("risk_level") == "low" else "no_go"
+    go_decision = _apply_readiness_to_go_decision(go_decision, readiness)
     return {
         "scene": constraints.get("planning_scene", "weekend_trip"),
-        "go_decision": "caution" if candidate["risk"].get("risk_level") == "medium" else "go" if candidate["risk"].get("risk_level") == "low" else "no_go",
+        "go_decision": go_decision,
         "decision_title": f"优先考虑{recommended_card['destination_name']}方向",
         "decision_reason": recommended_card["why_recommended"],
         "confidence_notes": confidence_notes,
         "equipment_advice": recommended_card.get("equipment_advice", []),
     }
+
+
+def _apply_readiness_to_go_decision(go_decision: str, ride_readiness: dict | None) -> str:
+    readiness = ride_readiness or {}
+    if readiness.get("status") == "rest":
+        return "no_go"
+    if readiness.get("status") == "light" and go_decision == "go":
+        return "caution"
+    return go_decision
 
 
 def _load_json_list(path: Path) -> list[dict]:
@@ -791,7 +924,7 @@ def _resolve_route_context(
                 "fallback_reason": "route-provider-missing",
             }
         )
-        return _build_template_only_route_context(route, constraints)
+        return _normalize_route_context(route, _build_template_only_route_context(route, constraints), constraints)
     try:
         context = route_provider.get_route_context(route, constraints)
         _record_stage(
@@ -805,7 +938,7 @@ def _resolve_route_context(
                 "fallback_reason": None,
             }
         )
-        return context
+        return _normalize_route_context(route, context, constraints)
     except Exception:
         _append_unique(fallback_reason, "route-provider-unavailable")
         _record_stage(
@@ -819,7 +952,7 @@ def _resolve_route_context(
                 "fallback_reason": "route-provider-unavailable",
             }
         )
-        return _build_template_only_route_context(route, constraints)
+        return _normalize_route_context(route, _build_template_only_route_context(route, constraints), constraints)
 
 
 def _enrich_routes_with_route_context(
@@ -863,6 +996,129 @@ def _build_template_only_route_context(route: dict, constraints: dict) -> dict:
     }
 
 
+def _default_route_end_point(route: dict) -> dict:
+    return {
+        "name": route.get("end_point_name") or route.get("start_point_name"),
+        "longitude": route.get("end_point_lng") or route.get("start_point_lng"),
+        "latitude": route.get("end_point_lat") or route.get("start_point_lat"),
+    }
+
+
+def _normalize_route_context(route: dict, context: dict | None, constraints: dict | None = None) -> dict:
+    constraints = constraints or {}
+    raw = dict(context or {})
+    template_start_point = raw.get("template_start_point") or {
+        "name": route.get("start_point_name"),
+        "longitude": route.get("start_point_lng"),
+        "latitude": route.get("start_point_lat"),
+    }
+    user_start_point = raw.get("user_start_point") or {
+        "name": constraints.get("start_point") or route.get("start_point_name"),
+        "longitude": None,
+        "latitude": None,
+    }
+    fact_source = raw.get("fact_source") or ("amap-dynamic" if route.get("route_source") == "dynamic_nearby" else "template")
+    provider_name = raw.get("provider_name", "template-only")
+    distance_km = raw.get("distance_km")
+    if distance_km is None:
+        distance_km = raw.get("total_distance_km") or route.get("distance_km")
+    estimated_duration_hours = raw.get("estimated_duration_hours")
+    if estimated_duration_hours is None:
+        estimated_duration_hours = raw.get("total_duration_hours") or route.get("estimated_duration_hours")
+    template_distance_km = raw.get("template_distance_km")
+    if template_distance_km is None and route.get("route_source") != "dynamic_nearby":
+        template_distance_km = route.get("distance_km")
+    template_duration_hours = raw.get("template_duration_hours")
+    if template_duration_hours is None and route.get("route_source") != "dynamic_nearby":
+        template_duration_hours = route.get("estimated_duration_hours")
+    total_distance_km = raw.get("total_distance_km")
+    if total_distance_km is None:
+        total_distance_km = distance_km
+    total_duration_hours = raw.get("total_duration_hours")
+    if total_duration_hours is None:
+        total_duration_hours = estimated_duration_hours
+    average_speed_kmh = raw.get("average_speed_kmh")
+    if average_speed_kmh is None and total_distance_km and total_duration_hours:
+        average_speed_kmh = round(float(total_distance_km) / float(total_duration_hours), 1)
+
+    template_layer = raw.get("template")
+    if template_layer is None and route.get("route_source") != "dynamic_nearby":
+        template_layer = {
+            "fact_source": "template",
+            "route_code": route.get("route_code"),
+            "route_name": route.get("name"),
+            "start_point": template_start_point,
+            "end_point": _default_route_end_point(route),
+            "distance_km": template_distance_km,
+            "duration_hours": template_duration_hours,
+            "surface_type": route.get("surface_type"),
+            "loop_type": route.get("loop_type"),
+        }
+
+    live_layer = raw.get("live")
+    live_fields_present = any(
+        raw.get(key) not in (None, [], {})
+        for key in ("polyline", "road_context", "direction_summary", "start_location", "approach_polyline")
+    ) or raw.get("approach_distance_km") not in (None, 0, 0.0) or provider_name != "template-only"
+    if live_layer is None and live_fields_present:
+        live_fact_source = fact_source
+        if fact_source == "template+local-approach":
+            live_fact_source = "local-approach"
+        elif fact_source == "template+amap":
+            live_fact_source = "amap-approach"
+        live_layer = {
+            "provider_name": provider_name,
+            "fact_source": live_fact_source,
+            "start_region": raw.get("start_region"),
+            "user_start_point": user_start_point,
+            "polyline": raw.get("polyline") or [],
+            "direction_summary": raw.get("direction_summary") or [],
+            "road_context": raw.get("road_context"),
+            "approach_distance_km": raw.get("approach_distance_km"),
+            "approach_duration_hours": raw.get("approach_duration_hours"),
+            "approach_method": raw.get("approach_method"),
+            "start_location": raw.get("start_location"),
+            "approach_polyline": raw.get("approach_polyline") or [],
+        }
+
+    resolved_layer = raw.get("resolved") or {
+        "provider_name": provider_name,
+        "fact_source": fact_source,
+        "metric_source": (
+            "dynamic-live"
+            if route.get("route_source") == "dynamic_nearby"
+            else "template"
+            if fact_source == "template"
+            else "template-plus-approach"
+            if raw.get("approach_distance_km") not in (None, 0, 0.0)
+            else "template-plus-live"
+        ),
+        "distance_km": distance_km,
+        "estimated_duration_hours": estimated_duration_hours,
+        "average_speed_kmh": average_speed_kmh,
+        "total_distance_km": total_distance_km,
+        "total_duration_hours": total_duration_hours,
+    }
+
+    return {
+        **raw,
+        "provider_name": provider_name,
+        "fact_source": fact_source,
+        "distance_km": distance_km,
+        "estimated_duration_hours": estimated_duration_hours,
+        "average_speed_kmh": average_speed_kmh,
+        "template_distance_km": template_distance_km,
+        "template_duration_hours": template_duration_hours,
+        "total_distance_km": total_distance_km,
+        "total_duration_hours": total_duration_hours,
+        "user_start_point": user_start_point,
+        "template_start_point": template_start_point,
+        "template": template_layer,
+        "live": live_layer,
+        "resolved": resolved_layer,
+    }
+
+
 def _resolve_poi_context(
     route: dict,
     poi_provider,
@@ -883,7 +1139,7 @@ def _resolve_poi_context(
                 "fallback_reason": "poi-provider-missing",
             }
         )
-        return {"poi_summary": None, "provider_name": "template-only"}
+        return _build_template_only_poi_context(route)
     try:
         context = poi_provider.get_poi_context(route)
         _record_stage(
@@ -897,7 +1153,7 @@ def _resolve_poi_context(
                 "fallback_reason": None,
             }
         )
-        return context
+        return _normalize_poi_context(route, context)
     except Exception:
         _append_unique(fallback_reason, "poi-provider-unavailable")
         _record_stage(
@@ -911,7 +1167,61 @@ def _resolve_poi_context(
                 "fallback_reason": "poi-provider-unavailable",
             }
         )
-        return {"poi_summary": None, "provider_name": "template-only"}
+        return _build_template_only_poi_context(route)
+
+
+def _build_template_only_poi_context(route: dict) -> dict:
+    return _normalize_poi_context(route, {"provider_name": "template-only", "poi_summary": None})
+
+
+def _normalize_poi_context(route: dict, context: dict | None) -> dict:
+    raw = dict(context or {})
+    provider_name = raw.get("provider_name", "template-only")
+    template_layer = {
+        "fact_source": "template",
+        "supply_items": list(route.get("supply_points", [])),
+        "bailout_items": list(route.get("bailout_options", [])),
+    }
+    live_items = list(raw.get("poi_items") or [])
+    summary = dict(raw.get("poi_summary") or {})
+    live_layer = summary.get("live")
+    if live_layer is None and live_items:
+        live_layer = {
+            "provider_name": provider_name,
+            "fact_source": summary.get("fact_source") or provider_name,
+            "supply_items": live_items,
+            "bailout_items": [],
+        }
+    resolved_summary = summary.get("resolved") or {
+        "supply_count": summary.get("supply_count", len(live_items or template_layer["supply_items"])),
+        "bailout_count": summary.get("bailout_count", len(template_layer["bailout_items"])),
+        "supply_labels": summary.get("supply_labels")
+        or [_poi_summary_label(item) for item in (live_items or template_layer["supply_items"])[:3]],
+        "bailout_labels": summary.get("bailout_labels")
+        or [str(item.get("name") or "") for item in template_layer["bailout_items"][:2]],
+        "fact_source": summary.get("fact_source") or ("template" if not live_items else provider_name),
+        "source_layer": summary.get("source_layer")
+        or ("mixed" if live_items and template_layer["bailout_items"] else "template-only" if not live_items else "live-only"),
+        "supply_fact_source": summary.get("supply_fact_source") or ("template" if not live_items else provider_name),
+        "bailout_fact_source": summary.get("bailout_fact_source") or ("template" if template_layer["bailout_items"] else None),
+    }
+    merged_summary = {
+        **resolved_summary,
+        "template": summary.get("template") or template_layer,
+        "live": live_layer,
+        "resolved": resolved_summary,
+    }
+    return {
+        **raw,
+        "provider_name": provider_name,
+        "poi_summary": merged_summary,
+        "poi_items": live_items,
+    }
+
+
+def _poi_summary_label(item: dict[str, Any]) -> str:
+    poi_type = item.get("type")
+    return f"{item['name']}({poi_type})" if poi_type else str(item.get("name") or "")
 
 
 def _append_unique(target: list[str], value: str) -> None:
@@ -949,6 +1259,7 @@ def _resolve_parsed_constraints(
             ),
             user_profile,
         )
+        # LLM 解析有时能理解意图但会漏掉明确写在 query 里的起点，此处用规则结果补齐关键字段。
         if not parsed.get("start_point") and fallback_constraints.get("start_point"):
             parsed["start_point"] = fallback_constraints["start_point"]
             parsed["missing_fields"] = [item for item in parsed.get("missing_fields", []) if item != "start_point"]
@@ -1037,6 +1348,7 @@ def _resolve_roadbook(
 def _call_llm_stage_with_timeout(call: Callable[[], Any], *, llm_provider) -> Any:
     executor = ThreadPoolExecutor(max_workers=1)
     try:
+        # 所有 LLM 阶段都受统一硬超时保护，避免单个 provider 卡死整个规划请求。
         timeout_seconds = min(float(getattr(llm_provider, "timeout_seconds", LLM_STAGE_TIMEOUT_SECONDS)), LLM_STAGE_TIMEOUT_SECONDS)
         future = executor.submit(call)
         return future.result(timeout=timeout_seconds)

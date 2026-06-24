@@ -54,7 +54,10 @@ async def put_admin_experience_content(payload: ExperienceContentSchema, request
 @router.post("/companion/plan", response_model=CompanionPlanResponseSchema)
 async def create_companion_plan(payload: CompanionPlanRequestSchema, request: Request) -> CompanionPlanResponseSchema:
     content = get_experience_content(request.app.state.database_url)
-    parsed_constraints = enrich_parsed_constraints(parse_query_fallback(payload.message), {})
+    user_profile = payload.user_profile.model_dump(mode="json") if payload.user_profile else {}
+    parsed_constraints = enrich_parsed_constraints(parse_query_fallback(payload.message), user_profile)
+    if payload.lifestyle_profile and not parsed_constraints.get("origin_region"):
+        parsed_constraints["origin_region"] = payload.lifestyle_profile.home_region
     target_date = payload.target_date or date.today()
     missing = missing_core_fields(parsed_constraints, target_date=target_date)
     if missing:
@@ -71,6 +74,7 @@ async def create_companion_plan(payload: CompanionPlanRequestSchema, request: Re
         planning_mode="nearby_trip" if parsed_constraints.get("planning_scene") == "weekend_trip" else "route",
         planning_scene=parsed_constraints.get("planning_scene") or "city_ride",
         input_mode="natural",
+        user_profile=payload.user_profile,
     )
     strategy_rules = list_active_city_strategy_configs(request.app.state.database_url, city_code=request_schema.city_code)
     risk_rules = list_active_risk_rules(request.app.state.database_url, city_code=request_schema.city_code)

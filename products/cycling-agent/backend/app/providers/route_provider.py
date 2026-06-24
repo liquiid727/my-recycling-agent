@@ -65,47 +65,52 @@ class LocalRouteProvider:
         }
         user_start_point = self._resolve_local_user_start_point(constraints, route)
         approach_context = self._estimate_local_approach(user_start_point, template_start_point)
+        # 本地 provider 不重算整条骑行路线，只把“用户到模板起点”的接驳段叠加到样板路线。
         total_distance_km = round(distance_km + approach_context["approach_distance_km"], 1)
         total_duration_hours = round(estimated_duration_hours + approach_context["approach_duration_hours"], 2)
         if approach_context["fact_source"] == "template+local-approach":
-            return {
-                "provider_name": self.provider_name,
-                "start_region": user_start_point.get("region") or origin_region,
-                "distance_km": total_distance_km,
-                "estimated_duration_hours": total_duration_hours,
-                "average_speed_kmh": round(total_distance_km / total_duration_hours, 1) if total_duration_hours else average_speed_kmh,
-                "template_distance_km": distance_km,
-                "template_duration_hours": estimated_duration_hours,
-                "total_distance_km": total_distance_km,
-                "total_duration_hours": total_duration_hours,
-                "approach_distance_km": approach_context["approach_distance_km"],
-                "approach_duration_hours": approach_context["approach_duration_hours"],
-                "user_start_point": user_start_point,
-                "template_start_point": template_start_point,
-                "surface_type": route.get("surface_type"),
-                "loop_type": route.get("loop_type"),
-                "fact_source": "template+local-approach",
-                "approach_method": "local-coordinate-estimate",
-            }
-        return {
-            "provider_name": self.provider_name,
-            "start_region": origin_region,
-            "distance_km": distance_km,
-            "estimated_duration_hours": estimated_duration_hours,
-            "average_speed_kmh": average_speed_kmh,
-            "template_distance_km": distance_km,
-            "template_duration_hours": estimated_duration_hours,
-            "total_distance_km": distance_km,
-            "total_duration_hours": estimated_duration_hours,
-            "approach_distance_km": None,
-            "approach_duration_hours": None,
-            "user_start_point": user_start_point,
-            "template_start_point": template_start_point,
-            "surface_type": route.get("surface_type"),
-            "loop_type": route.get("loop_type"),
-            "fact_source": "template",
-            "fallback_reason": "route-provider-template-only",
-        }
+            return _compose_route_context(
+                route,
+                provider_name=self.provider_name,
+                fact_source="template+local-approach",
+                live_fact_source="local-approach",
+                start_region=user_start_point.get("region") or origin_region,
+                distance_km=total_distance_km,
+                estimated_duration_hours=total_duration_hours,
+                average_speed_kmh=round(total_distance_km / total_duration_hours, 1) if total_duration_hours else average_speed_kmh,
+                template_distance_km=distance_km,
+                template_duration_hours=estimated_duration_hours,
+                total_distance_km=total_distance_km,
+                total_duration_hours=total_duration_hours,
+                approach_distance_km=approach_context["approach_distance_km"],
+                approach_duration_hours=approach_context["approach_duration_hours"],
+                user_start_point=user_start_point,
+                template_start_point=template_start_point,
+                surface_type=route.get("surface_type"),
+                loop_type=route.get("loop_type"),
+                approach_method="local-coordinate-estimate",
+            )
+        return _compose_route_context(
+            route,
+            provider_name=self.provider_name,
+            fact_source="template",
+            live_fact_source=None,
+            start_region=origin_region,
+            distance_km=distance_km,
+            estimated_duration_hours=estimated_duration_hours,
+            average_speed_kmh=average_speed_kmh,
+            template_distance_km=distance_km,
+            template_duration_hours=estimated_duration_hours,
+            total_distance_km=distance_km,
+            total_duration_hours=estimated_duration_hours,
+            approach_distance_km=None,
+            approach_duration_hours=None,
+            user_start_point=user_start_point,
+            template_start_point=template_start_point,
+            surface_type=route.get("surface_type"),
+            loop_type=route.get("loop_type"),
+            fallback_reason="route-provider-template-only",
+        )
 
     def _resolve_local_user_start_point(self, constraints: dict[str, Any], route: dict[str, Any]) -> dict[str, Any]:
         start_point = constraints.get("start_point") or route.get("start_point_name")
@@ -163,6 +168,7 @@ def _normalize_local_address(address: str | None) -> str:
 
 
 def _estimate_local_cycling_path(start_point: dict[str, Any], end_point: dict[str, Any]) -> dict[str, Any]:
+    # 没有真实骑行导航时，用直线距离 * 绕行系数给出保守估算，至少保证动态发现链路可继续。
     distance_km = round(
         _haversine_km(
             float(start_point["longitude"]),
@@ -189,6 +195,133 @@ def _endpoint_polyline(start_point: dict[str, Any], end_point: dict[str, Any]) -
         {"longitude": float(start_point["longitude"]), "latitude": float(start_point["latitude"])},
         {"longitude": float(end_point["longitude"]), "latitude": float(end_point["latitude"])},
     ]
+
+
+def _route_end_point(route: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": route.get("end_point_name") or route.get("start_point_name"),
+        "longitude": route.get("end_point_lng") or route.get("start_point_lng"),
+        "latitude": route.get("end_point_lat") or route.get("start_point_lat"),
+    }
+
+
+def _build_route_template_layer(route: dict[str, Any], template_start_point: dict[str, Any]) -> dict[str, Any] | None:
+    if route.get("route_source") == "dynamic_nearby":
+        return None
+    return {
+        "fact_source": "template",
+        "route_code": route.get("route_code"),
+        "route_name": route.get("name"),
+        "start_point": template_start_point,
+        "end_point": _route_end_point(route),
+        "distance_km": float(route.get("distance_km", 0)),
+        "duration_hours": float(route.get("estimated_duration_hours", 0)),
+        "surface_type": route.get("surface_type"),
+        "loop_type": route.get("loop_type"),
+    }
+
+
+def _resolved_metric_source(route: dict[str, Any], fact_source: str, approach_distance_km: float | None) -> str:
+    if route.get("route_source") == "dynamic_nearby":
+        return "dynamic-live"
+    if fact_source == "template":
+        return "template"
+    if approach_distance_km not in (None, 0, 0.0):
+        return "template-plus-approach"
+    return "template-plus-live"
+
+
+def _compose_route_context(
+    route: dict[str, Any],
+    *,
+    provider_name: str,
+    fact_source: str,
+    live_fact_source: str | None,
+    start_region: str | None,
+    distance_km: float,
+    estimated_duration_hours: float,
+    average_speed_kmh: float | None,
+    template_distance_km: float,
+    template_duration_hours: float,
+    total_distance_km: float,
+    total_duration_hours: float,
+    approach_distance_km: float | None,
+    approach_duration_hours: float | None,
+    user_start_point: dict[str, Any],
+    template_start_point: dict[str, Any],
+    surface_type: str | None,
+    loop_type: str | None,
+    polyline: list[dict[str, float]] | None = None,
+    direction_summary: list[dict[str, Any]] | None = None,
+    road_context: dict[str, Any] | None = None,
+    fallback_reason: str | None = None,
+    approach_method: str | None = None,
+    start_location: dict[str, Any] | None = None,
+    approach_polyline: list[dict[str, float]] | None = None,
+) -> dict[str, Any]:
+    template_layer = _build_route_template_layer(route, template_start_point)
+    live_layer = None
+    if live_fact_source:
+        live_layer = {
+            "provider_name": provider_name,
+            "fact_source": live_fact_source,
+            "start_region": start_region,
+            "user_start_point": user_start_point,
+            "polyline": polyline or [],
+            "direction_summary": direction_summary or [],
+            "road_context": road_context,
+            "approach_distance_km": approach_distance_km,
+            "approach_duration_hours": approach_duration_hours,
+            "approach_method": approach_method,
+            "start_location": start_location,
+            "approach_polyline": approach_polyline or [],
+        }
+    resolved_layer = {
+        "provider_name": provider_name,
+        "fact_source": fact_source,
+        "metric_source": _resolved_metric_source(route, fact_source, approach_distance_km),
+        "distance_km": distance_km,
+        "estimated_duration_hours": estimated_duration_hours,
+        "average_speed_kmh": average_speed_kmh,
+        "total_distance_km": total_distance_km,
+        "total_duration_hours": total_duration_hours,
+    }
+    context = {
+        "provider_name": provider_name,
+        "start_region": start_region,
+        "distance_km": distance_km,
+        "estimated_duration_hours": estimated_duration_hours,
+        "average_speed_kmh": average_speed_kmh,
+        "template_distance_km": template_distance_km,
+        "template_duration_hours": template_duration_hours,
+        "total_distance_km": total_distance_km,
+        "total_duration_hours": total_duration_hours,
+        "approach_distance_km": approach_distance_km,
+        "approach_duration_hours": approach_duration_hours,
+        "user_start_point": user_start_point,
+        "template_start_point": template_start_point,
+        "surface_type": surface_type,
+        "loop_type": loop_type,
+        "fact_source": fact_source,
+        "template": template_layer,
+        "live": live_layer,
+        "resolved": resolved_layer,
+    }
+    if polyline:
+        context["polyline"] = polyline
+    if direction_summary:
+        context["direction_summary"] = direction_summary
+    if road_context:
+        context["road_context"] = road_context
+    if fallback_reason:
+        context["fallback_reason"] = fallback_reason
+    if approach_method:
+        context["approach_method"] = approach_method
+    if start_location:
+        context["start_location"] = start_location
+    if approach_polyline:
+        context["approach_polyline"] = approach_polyline
+    return context
 
 
 class AMapRouteProvider:
@@ -224,27 +357,11 @@ class AMapRouteProvider:
         approach_context = self._resolve_approach_context(user_start_point, template_start_point)
         total_distance_km = round(template_distance_km + approach_context["approach_distance_km"], 1)
         total_duration_hours = round(template_duration_hours + approach_context["approach_duration_hours"], 2)
-        route_context = {
-            "provider_name": self.provider_name,
-            "start_region": self._extract_region(reverse_payload, constraints, route),
-            "distance_km": total_distance_km,
-            "estimated_duration_hours": total_duration_hours,
-            "average_speed_kmh": round(total_distance_km / total_duration_hours, 1) if total_duration_hours else None,
-            "template_distance_km": template_distance_km,
-            "template_duration_hours": template_duration_hours,
-            "total_distance_km": total_distance_km,
-            "total_duration_hours": total_duration_hours,
-            "approach_distance_km": approach_context["approach_distance_km"],
-            "approach_duration_hours": approach_context["approach_duration_hours"],
-            "user_start_point": user_start_point,
-            "template_start_point": template_start_point,
-            "surface_type": route.get("surface_type"),
-            "loop_type": route.get("loop_type"),
-            "fact_source": "template+amap",
-            "start_location": user_start_point,
-            "road_context": self._extract_road_context(reverse_payload),
-            "approach_polyline": approach_context["approach_polyline"],
-        }
+        fact_source = "template+amap"
+        live_fact_source = "amap-approach"
+        polyline = list(approach_context["approach_polyline"])
+        direction_summary: list[dict[str, Any]] = []
+        road_context = self._extract_road_context(reverse_payload)
 
         end_point_name = route.get("end_point_name")
         if end_point_name and end_point_name != route.get("start_point_name") and route.get("loop_type") != "loop":
@@ -252,16 +369,41 @@ class AMapRouteProvider:
                 end_point = self._resolve_point(end_point_name, None, None, city_code=route.get("city_code", "hangzhou"))
                 direction_payload = self._cycling_direction(template_start_point, end_point)
             except Exception:
-                route_context["fact_source"] = "template+amap"
+                fact_source = "template+amap"
             else:
                 normalized = self._normalize_direction(direction_payload)
-                route_context["direction_summary"] = normalized["direction_summary"]
-                route_context["polyline"] = [*approach_context["approach_polyline"], *normalized["polyline"]]
-                route_context["fact_source"] = "amap"
+                direction_summary = normalized["direction_summary"]
+                polyline = [*approach_context["approach_polyline"], *normalized["polyline"]]
+                fact_source = "amap"
+                live_fact_source = "amap"
         elif approach_context["approach_polyline"]:
-            route_context["polyline"] = approach_context["approach_polyline"]
+            polyline = approach_context["approach_polyline"]
 
-        return route_context
+        return _compose_route_context(
+            route,
+            provider_name=self.provider_name,
+            fact_source=fact_source,
+            live_fact_source=live_fact_source,
+            start_region=self._extract_region(reverse_payload, constraints, route),
+            distance_km=total_distance_km,
+            estimated_duration_hours=total_duration_hours,
+            average_speed_kmh=round(total_distance_km / total_duration_hours, 1) if total_duration_hours else None,
+            template_distance_km=template_distance_km,
+            template_duration_hours=template_duration_hours,
+            total_distance_km=total_distance_km,
+            total_duration_hours=total_duration_hours,
+            approach_distance_km=approach_context["approach_distance_km"],
+            approach_duration_hours=approach_context["approach_duration_hours"],
+            user_start_point=user_start_point,
+            template_start_point=template_start_point,
+            surface_type=route.get("surface_type"),
+            loop_type=route.get("loop_type"),
+            polyline=polyline,
+            direction_summary=direction_summary,
+            road_context=road_context,
+            start_location=user_start_point,
+            approach_polyline=approach_context["approach_polyline"],
+        )
 
     def resolve_point(self, address: str, *, city_code: str) -> dict[str, Any]:
         return self._resolve_point(address, None, None, city_code=city_code)
@@ -270,6 +412,7 @@ class AMapRouteProvider:
         try:
             path = self._normalize_direction(self._cycling_direction(start_point, end_point))
         except Exception:
+            # 高德骑行接口失败时，不中断上层流程，退回本地估算保证仍能产出候选。
             return _estimate_local_cycling_path(start_point, end_point)
         if not path.get("polyline"):
             path["polyline"] = _endpoint_polyline(start_point, end_point)
@@ -307,6 +450,7 @@ class AMapRouteProvider:
         city_code: str,
     ) -> dict[str, Any]:
         if longitude is not None and latitude is not None:
+            # 模板里已有坐标时直接复用，避免重复 geocode 带来的额外请求和偏移误差。
             return {"name": address, "longitude": float(longitude), "latitude": float(latitude), "source": "template"}
         if not address:
             raise RuntimeError("amap-route-provider-missing-address")

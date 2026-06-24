@@ -1,3 +1,5 @@
+import type { UserProfile } from "../settings/store";
+
 export type ExperienceContent = {
   hero: {
     eyebrow: string;
@@ -78,15 +80,25 @@ export type ExperienceRouteDetail = {
   bailout_options: Array<{ name: string; km_mark: number; reason: string }>;
 };
 
+export type CompanionPlanRequest = {
+  message: string;
+  target_date?: string;
+  user_profile?: {
+    fitness_level?: UserProfile["fitness_level"];
+    slope_tolerance?: UserProfile["slope_tolerance"];
+    ride_style_preferences?: UserProfile["ride_style_preferences"];
+  };
+};
+
 export async function getExperienceHome(): Promise<ExperienceContent> {
   return fetchJson("/api/v1/experience/home");
 }
 
-export async function createCompanionPlan(message: string): Promise<CompanionPlanResponse> {
+export async function createCompanionPlan(payload: CompanionPlanRequest): Promise<CompanionPlanResponse> {
   return fetchJson("/api/v1/experience/companion/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify(payload),
   });
 }
 

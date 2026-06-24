@@ -19,6 +19,7 @@ async def create_chat_turn(payload: ChatTurnRequestSchema, request: Request) -> 
         target_date=payload.target_date,
         slot_state=payload.slot_state,
         user_profile=payload.user_profile.model_dump() if payload.user_profile else None,
+        rider_state=payload.rider_state.model_dump() if payload.rider_state else None,
         llm_provider=request.app.state.llm_provider,
     )
     return ChatTurnResponseSchema.model_validate(response)

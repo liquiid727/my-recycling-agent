@@ -103,6 +103,54 @@ export default function PlannerPage() {
               ))}
             </div>
 
+            <section className="mt-6 grid gap-4 md:grid-cols-3" aria-label="骑前状态">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-ink">身体状态</span>
+                <select
+                  aria-label="身体状态"
+                  className="field-input"
+                  value={planner.riderState.fatigue_level}
+                  onChange={(event) => planner.setRiderStateField("fatigue_level", event.target.value as "" | "fresh" | "normal" | "tired")}
+                >
+                  <option value="">先不指定</option>
+                  <option value="fresh">刚休息好</option>
+                  <option value="normal">正常</option>
+                  <option value="tired">有点累</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-ink">这次想怎么骑</span>
+                <select
+                  aria-label="这次想怎么骑"
+                  className="field-input"
+                  value={planner.riderState.mood}
+                  onChange={(event) => planner.setRiderStateField("mood", event.target.value as "" | "relax" | "exercise" | "explore" | "social" | "recover")}
+                >
+                  <option value="">先不指定</option>
+                  <option value="relax">放松散心</option>
+                  <option value="recover">恢复一下</option>
+                  <option value="explore">想逛逛</option>
+                  <option value="exercise">想活动活动</option>
+                  <option value="social">想约人一起</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-ink">上次骑行</span>
+                <select
+                  aria-label="上次骑行"
+                  className="field-input"
+                  value={planner.riderState.last_ride_days_ago}
+                  onChange={(event) => planner.setRiderStateField("last_ride_days_ago", event.target.value ? Number(event.target.value) : "")}
+                >
+                  <option value="">先不指定</option>
+                  <option value="0">今天刚骑过</option>
+                  <option value="1">昨天</option>
+                  <option value="3">3 天前</option>
+                  <option value="7">一周前</option>
+                </select>
+              </label>
+            </section>
+
             <form className="planner-form" onSubmit={handleSubmit}>
               <label className="block" htmlFor="plannerQuery">
                 <span className="body-copy block text-[13px]">从一句自然语言开始</span>
@@ -134,6 +182,7 @@ export default function PlannerPage() {
             <div className="planner-status-chip-row">
               <span className="pill-tag">模式：{plannerModeCopy[planner.planningMode].label}</span>
               <span className="pill-tag">状态：{planner.loading ? "运行中" : planner.result ? "已生成结果" : "等待输入"}</span>
+              {planner.riderState.fatigue_level ? <span className="pill-tag">体感：{planner.riderState.fatigue_level}</span> : null}
             </div>
             <div className="planner-stage-list">
               {planner.stageUpdates.length > 0 ? (

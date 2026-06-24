@@ -33,6 +33,10 @@ export default function RouteMapSection({ routeMap }: Props) {
     : "高德地图加载失败，当前展示路线关键点。";
   const userStartPoint = routeMap.user_start_point ?? routeMap.start_point;
   const templateStartPoint = routeMap.template_start_point ?? routeMap.start_point;
+  const hasTemplateLayer = Boolean(routeMap.template);
+  const hasLiveLayer = Boolean(routeMap.live);
+  const hasApproachLayer = routeMap.approach_distance_km != null && routeMap.approach_duration_hours != null;
+  const summaryRows = buildSummaryRows(routeMap);
 
   useEffect(() => {
     if (!mapRequested) {
@@ -91,16 +95,23 @@ export default function RouteMapSection({ routeMap }: Props) {
       <div className="risk-grid">
         <span>从你的出发点开始</span>
         <span>总量：{formatMetric(routeMap.total_distance_km)} km / {formatMetric(routeMap.total_duration_hours)} h</span>
-        <span>接驳：{formatMetric(routeMap.approach_distance_km)} km / {formatMetric(routeMap.approach_duration_hours)} h</span>
-        <span>主路线：{formatMetric(routeMap.template_distance_km)} km / {formatMetric(routeMap.template_duration_hours)} h</span>
+        {summaryRows.map((row) => (
+          <span key={row.label}>
+            {row.label}：{formatMetric(row.distanceKm)} km / {formatMetric(row.durationHours)} h
+          </span>
+        ))}
       </div>
       {status !== "ready" ? (
         <div className="route-map-fallback">
           <p>{status === "loading" ? "正在加载高德地图..." : fallbackMessage}</p>
           <ul className="detail-list">
             <li>你的出发点：{userStartPoint.name ?? "-"}</li>
-            <li>主路线起点：{templateStartPoint.name ?? "-"}</li>
-            <li>终点：{routeMap.end_point.name ?? "-"}</li>
+            {hasTemplateLayer ? <li>模板起点：{templateStartPoint.name ?? "-"}</li> : null}
+            <li>{hasTemplateLayer ? "路线终点" : "动态路线终点"}：{routeMap.end_point.name ?? "-"}</li>
+            {hasLiveLayer ? <li>实时路径来源：{describeLiveLayer(routeMap)}</li> : null}
+            {hasApproachLayer && hasTemplateLayer ? (
+              <li>接驳口径：先按你的出发点接入，再叠加模板路线总量。</li>
+            ) : null}
             {routeMap.supply_points.map((point) => (
               <li key={`${point.name}-${point.km_mark}`}>
                 补给：{point.km_mark} km / {point.name} ({point.type})
@@ -115,7 +126,7 @@ export default function RouteMapSection({ routeMap }: Props) {
         </div>
       ) : null}
       <p className="summary-copy">
-        地图来源：{routeMap.provider_name} / {routeMap.fact_source}
+        路线口径：{describeMetricSource(routeMap)}
       </p>
     </article>
   );
@@ -139,6 +150,63 @@ function buildCenter(routeMap: RouteMap): [number, number] {
 
 function formatMetric(value: number | null | undefined): string {
   return value == null ? "-" : String(value);
+}
+
+function buildSummaryRows(routeMap: RouteMap): Array<{ label: string; distanceKm?: number | null; durationHours?: number | null }> {
+  const rows: Array<{ label: string; distanceKm?: number | null; durationHours?: number | null }> = [];
+  const shouldShowApproach =
+    Boolean(routeMap.template) ||
+    (routeMap.approach_distance_km ?? 0) > 0 ||
+    (routeMap.approach_duration_hours ?? 0) > 0;
+  if (shouldShowApproach) {
+    rows.push({
+      label: "接驳段",
+      distanceKm: routeMap.approach_distance_km,
+      durationHours: routeMap.approach_duration_hours
+    });
+  }
+  if (routeMap.template) {
+    rows.push({
+      label: "模板骨架",
+      distanceKm: routeMap.template.distance_km ?? routeMap.template_distance_km,
+      durationHours: routeMap.template.duration_hours ?? routeMap.template_duration_hours
+    });
+  } else if (routeMap.live || routeMap.resolved?.metric_source === "dynamic-live") {
+    rows.push({
+      label: "动态路线",
+      distanceKm: routeMap.resolved?.distance_km ?? routeMap.total_distance_km,
+      durationHours: routeMap.resolved?.estimated_duration_hours ?? routeMap.total_duration_hours
+    });
+  }
+  return rows;
+}
+
+function describeMetricSource(routeMap: RouteMap): string {
+  const metricSource = routeMap.resolved?.metric_source;
+  if (metricSource === "dynamic-live") {
+    return "动态路线实时结果";
+  }
+  if (metricSource === "template-plus-approach") {
+    return "模板骨架 + 出发点接驳";
+  }
+  if (metricSource === "template-plus-live") {
+    return "模板骨架 + 实时路径";
+  }
+  return "模板路线估算";
+}
+
+function describeLiveLayer(routeMap: RouteMap): string {
+  const factSource = routeMap.live?.fact_source ?? routeMap.fact_source;
+  if (factSource === "amap-dynamic") {
+    return "基于实时动态路径生成";
+  }
+  if (factSource === "amap" || factSource === "amap-approach") {
+    return "高德路径结果";
+  }
+  if (factSource === "local-approach") {
+    return "本地接驳估算";
+  }
+  return routeMap.provider_name;
 }
 
 function loadAmapScript(key: string): Promise<void> {

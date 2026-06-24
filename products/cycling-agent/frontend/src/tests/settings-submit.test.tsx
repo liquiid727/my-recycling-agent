@@ -7,6 +7,7 @@ import SettingsPage from "../pages/SettingsPage";
 
 test("loads and saves lifestyle preferences", async () => {
   const user = userEvent.setup();
+  window.localStorage.clear();
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (!init || init.method === "GET") {
       return {
@@ -38,6 +39,9 @@ test("loads and saves lifestyle preferences", async () => {
 
   await user.clear(screen.getByLabelText("喜欢的意象"));
   await user.type(screen.getByLabelText("喜欢的意象"), "树荫, 咖啡, 日落");
+  await user.selectOptions(screen.getByLabelText("默认身体状态"), "tired");
+  await user.selectOptions(screen.getByLabelText("默认这次想怎么骑"), "recover");
+  await user.selectOptions(screen.getByLabelText("默认上次骑行"), "3");
   await user.click(screen.getByRole("button", { name: "保存偏好" }));
 
   await waitFor(() =>
@@ -49,5 +53,10 @@ test("loads and saves lifestyle preferences", async () => {
     ),
   );
 
+  expect(JSON.parse(window.localStorage.getItem("cycling-agent-rider-state") ?? "{}")).toEqual({
+    fatigue_level: "tired",
+    mood: "recover",
+    last_ride_days_ago: 3,
+  });
   expect(await screen.findByText("偏好已保存")).toBeInTheDocument();
 });

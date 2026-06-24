@@ -19,6 +19,9 @@ def test_default_user_profile_can_be_saved_and_loaded(tmp_path, monkeypatch) -> 
         "/api/v1/profile/default",
         json={
             "home_region": "滨江",
+            "bike_type": "road",
+            "experience_level": "casual",
+            "riding_goal": "relax",
             "fitness_level": "medium",
             "ride_style_preferences": ["scenic", "relaxed"],
             "slope_tolerance": "avoid",
@@ -29,9 +32,12 @@ def test_default_user_profile_can_be_saved_and_loaded(tmp_path, monkeypatch) -> 
     assert saved_payload["id"]
     assert saved_payload["uid"] == "00000001"
     assert saved_payload["home_region"] == "滨江"
+    assert saved_payload["bike_type"] == "road"
+    assert saved_payload["experience_level"] == "casual"
 
     loaded = client.get("/api/v1/profile/default")
     assert loaded.status_code == 200
     loaded_payload = loaded.json()
     assert loaded_payload["uid"] == "00000001"
     assert loaded_payload["ride_style_preferences"] == ["scenic", "relaxed"]
+    assert loaded_payload["riding_goal"] == "relax"

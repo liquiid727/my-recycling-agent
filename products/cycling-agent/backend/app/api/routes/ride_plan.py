@@ -23,6 +23,7 @@ from app.agents.query_parser_agent import (
     build_clarification_prompt,
     build_structured_constraints,
     enrich_parsed_constraints,
+    infer_explicit_planning_scene,
     missing_core_fields,
     parse_query_fallback,
 )
@@ -63,6 +64,7 @@ async def create_ride_plan_stream(payload: RidePlanRequestSchema, request: Reque
     cached = _resolve_cached_plan(payload, request)
     if cached is not None:
         def stream_cached_events():
+            # 缓存命中时仍按实时流式协议重放事件，前端可以复用同一套 SSE 消费逻辑。
             yield _format_sse(
                 "planning_started",
                 {
@@ -89,6 +91,7 @@ async def create_ride_plan_stream(payload: RidePlanRequestSchema, request: Reque
 
     def worker() -> None:
         try:
+            # 规划主链路仍是同步函数，这里用后台线程把阶段事件持续推给 SSE 输出端。
             plan_payload = build_demo_plan(
                 payload,
                 llm_provider=request.app.state.llm_provider,
@@ -174,8 +177,13 @@ def _parse_payload_constraints(payload: RidePlanRequestSchema) -> dict:
         )
     else:
         parsed = enrich_parsed_constraints(parse_query_fallback(payload.query), user_profile)
+        explicit_scene = infer_explicit_planning_scene(payload.query)
+        if explicit_scene is not None:
+            parsed["planning_scene"] = explicit_scene
+        elif payload.planning_scene:
+            parsed["planning_scene"] = payload.planning_scene
     parsed["planning_mode"] = payload.planning_mode
-    if payload.planning_scene:
+    if payload.input_mode == "structured" and payload.planning_scene:
         parsed["planning_scene"] = payload.planning_scene
     return parsed
 
@@ -195,6 +203,7 @@ def _resolve_cached_plan(payload: RidePlanRequestSchema, request: Request) -> di
 
     cloned = deepcopy(cached_plan)
     cached_request_no = cloned["request_no"]
+    # 命中缓存也生成新的 request_no，避免审计记录和结果表把不同请求折叠成同一条。
     cloned["request_no"] = _new_request_no()
     cloned["tool_trace"] = [
         {
@@ -238,6 +247,7 @@ def _persist_plan_payload(plan_payload: dict, payload: RidePlanRequestSchema, re
 def _is_cacheable_plan(plan_payload: dict) -> bool:
     if plan_payload.get("status") != "success":
         return False
+    # provider 缺失或候选为空时，缓存只会固化失败态，这类结果让后续请求重新尝试更合理。
     non_cacheable_reasons = {
         "route-provider-missing",
         "route-provider-unavailable",

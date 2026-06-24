@@ -20,10 +20,14 @@ type Props = {
 };
 
 export default function PlanResultView({ result }: Props) {
+  const displayDecisionSummary = result.decision_summary
+    ? buildDisplayDecisionSummary(result.decision_summary, result.ride_readiness)
+    : null;
   if (result.status === "no_match") {
     const showPopularFallback = shouldShowPopularRouteFallback(result);
     return (
       <div className="success-layout">
+        {result.ride_readiness ? <RideReadinessPanel readiness={result.ride_readiness} /> : null}
         <article className="detail-panel state-error">
           <h3>当前没有合适路线</h3>
           <p>{result.no_match_reason ?? "请调整时长、出发区域或骑行偏好后重试。"}</p>
@@ -85,7 +89,8 @@ export default function PlanResultView({ result }: Props) {
   if (result.planning_mode === "nearby_trip" && result.recommended_trip) {
     return (
       <div className="success-layout">
-        {result.decision_summary ? <DecisionSummaryPanel summary={result.decision_summary} /> : null}
+        {displayDecisionSummary ? <DecisionSummaryPanel summary={displayDecisionSummary} readinessLinked={Boolean(result.ride_readiness)} /> : null}
+        {result.ride_readiness ? <RideReadinessPanel readiness={result.ride_readiness} /> : null}
         {result.input_summary ? <InputSummaryCard summary={result.input_summary} /> : null}
         {weatherSnapshot ? <WeatherStatusCard snapshot={weatherSnapshot} fallbackReason={fallbackReason} /> : null}
         <article className="detail-panel detail-panel-primary">
@@ -113,6 +118,13 @@ export default function PlanResultView({ result }: Props) {
             </ul>
           ) : null}
         </article>
+
+        {result.recommended_trip.source_meta ? (
+          <TripSourceMetaPanel
+            sourceMeta={result.recommended_trip.source_meta}
+            destinationName={result.recommended_trip.destination_name}
+          />
+        ) : null}
 
         {result.trip_rhythm ? (
           <article className="detail-panel">
@@ -171,6 +183,7 @@ export default function PlanResultView({ result }: Props) {
               {(result.trip_alternatives ?? []).map((trip) => (
                 <li key={trip.trip_no}>
                   {trip.trip_name}: {trip.destination_name} / {trip.total_duration_hours} h / {trip.risk_level}
+                  {trip.source_meta ? `。${formatTripAlternativeSourceMeta(trip.source_meta)}` : ""}
                 </li>
               ))}
             </ul>
@@ -185,7 +198,8 @@ export default function PlanResultView({ result }: Props) {
 
   return (
     <div className="success-layout">
-      {result.decision_summary ? <DecisionSummaryPanel summary={result.decision_summary} /> : null}
+      {displayDecisionSummary ? <DecisionSummaryPanel summary={displayDecisionSummary} readinessLinked={Boolean(result.ride_readiness)} /> : null}
+      {result.ride_readiness ? <RideReadinessPanel readiness={result.ride_readiness} /> : null}
       {result.input_summary ? <InputSummaryCard summary={result.input_summary} /> : null}
       {clarificationPrompt ? (
         <article className="detail-panel state-error">
@@ -279,7 +293,13 @@ function PopularRouteFallback({ result }: Props) {
   );
 }
 
-function DecisionSummaryPanel({ summary }: { summary: NonNullable<RidePlanResponse["decision_summary"]> }) {
+function DecisionSummaryPanel({
+  summary,
+  readinessLinked
+}: {
+  summary: NonNullable<RidePlanResponse["decision_summary"]>;
+  readinessLinked: boolean;
+}) {
   return (
     <article className="detail-panel detail-panel-primary">
       <div className="section-heading">
@@ -288,6 +308,7 @@ function DecisionSummaryPanel({ summary }: { summary: NonNullable<RidePlanRespon
       </div>
       <p className="summary-copy">{summary.decision_reason}</p>
       <p className="risk-pill">结论：{summary.go_decision}</p>
+      {readinessLinked ? <p className="body-copy">骑前身体和天气状态已经在下方单独展开。</p> : null}
       {summary.confidence_notes.length > 0 ? (
         <ul className="detail-list">
           {summary.confidence_notes.map((item) => (
@@ -304,6 +325,194 @@ function DecisionSummaryPanel({ summary }: { summary: NonNullable<RidePlanRespon
       ) : null}
     </article>
   );
+}
+
+function RideReadinessPanel({ readiness }: { readiness: NonNullable<RidePlanResponse["ride_readiness"]> }) {
+  const cautionFlags = readiness.caution_flags ?? [];
+  return (
+    <article className="detail-panel">
+      <div className="section-heading">
+        <p className="section-kicker">Ride Readiness</p>
+        <h3>骑前状态判断</h3>
+      </div>
+      <div className="metric-row">
+        <span className="pill-tag">建议：{formatReadinessStatus(readiness.status)}</span>
+        <span className="pill-tag">强度：{formatIntensity(readiness.recommended_intensity)}</span>
+        <span className="pill-tag">准备度：{Math.round(readiness.score * 100)} 分</span>
+      </div>
+      <p className="summary-copy">{readiness.summary}</p>
+      {readiness.reasons.length > 0 ? (
+        <ul className="detail-list">
+          {readiness.reasons.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
+      {cautionFlags.length > 0 ? (
+        <p className="body-copy">注意项：{cautionFlags.map(formatCautionFlag).join(" / ")}</p>
+      ) : null}
+    </article>
+  );
+}
+
+function formatReadinessStatus(status: NonNullable<RidePlanResponse["ride_readiness"]>["status"]): string {
+  if (status === "go") {
+    return "可以出发";
+  }
+  if (status === "light") {
+    return "轻一点骑";
+  }
+  return "先休息";
+}
+
+function formatIntensity(intensity: NonNullable<RidePlanResponse["ride_readiness"]>["recommended_intensity"]): string {
+  if (intensity === "steady") {
+    return "正常节奏";
+  }
+  if (intensity === "light") {
+    return "恢复节奏";
+  }
+  return "不建议拉强度";
+}
+
+function formatCautionFlag(flag: string): string {
+  const labelMap: Record<string, string> = {
+    heat: "高温",
+    cold: "低温",
+    rain: "降雨",
+    wind: "大风",
+    fatigue: "疲劳",
+    recovery: "恢复期",
+    long_break: "久未骑行",
+    low_fitness: "体能保守"
+  };
+  return labelMap[flag] ?? flag;
+}
+
+function TripSourceMetaPanel({
+  sourceMeta,
+  destinationName
+}: {
+  sourceMeta: NonNullable<NonNullable<RidePlanResponse["recommended_trip"]>["source_meta"]>;
+  destinationName: string;
+}) {
+  const tripTemplate = sourceMeta.trip_template;
+  const destinationTemplate = sourceMeta.destination_template;
+  const routeBinding = sourceMeta.route_binding;
+  const resolvedMetrics = sourceMeta.resolved_metrics;
+
+  return (
+    <article className="detail-panel">
+      <div className="section-heading">
+        <p className="section-kicker">Binding</p>
+        <h3>这次怎么承接</h3>
+      </div>
+      <ul className="detail-list">
+        {tripTemplate?.trip_no ? (
+          <li>
+            周末骨架：{tripTemplate.trip_no}
+            {tripTemplate.duration_bucket ? ` / ${formatDurationBucket(tripTemplate.duration_bucket)}` : ""}
+          </li>
+        ) : null}
+        {destinationTemplate ? (
+          <li>
+            目的地模板：{destinationTemplate.destination_no ?? destinationName}
+            {destinationTemplate.destination_type ? ` / ${destinationTemplate.destination_type}` : ""}
+          </li>
+        ) : null}
+        {routeBinding?.selected_route_name ? (
+          <li>
+            实际承接路线：{routeBinding.selected_route_name}
+            {routeBinding.selected_route_code ? ` / ${routeBinding.selected_route_code}` : ""}
+            {routeBinding.selected_route_source ? ` / ${formatRouteBindingSource(routeBinding.selected_route_source)}` : ""}
+          </li>
+        ) : null}
+        {resolvedMetrics?.metric_source ? (
+          <li>总量口径：{formatTripMetricSource(resolvedMetrics.metric_source)}</li>
+        ) : null}
+        {routeBinding?.audit_summary ? <li>审计摘要：{routeBinding.audit_summary}</li> : null}
+        {routeBinding ? (
+          <li>
+            匹配方式：
+            {routeBinding.is_template_route_match
+              ? "沿用原 trip skeleton 绑定的推荐路线。"
+              : "没有强行沿用模板路线，改用更贴合这次出发点和约束的路线去承接。"}
+          </li>
+        ) : null}
+      </ul>
+    </article>
+  );
+}
+
+function formatDurationBucket(durationBucket: string): string {
+  const labelMap: Record<string, string> = {
+    evening: "夜骑",
+    half_day: "半天",
+    one_day: "一天",
+    two_day: "两天",
+    three_day: "三天"
+  };
+  return labelMap[durationBucket] ?? durationBucket;
+}
+
+function formatRouteBindingSource(source: string): string {
+  const labelMap: Record<string, string> = {
+    dynamic_nearby: "动态近场路线",
+    "amap-dynamic": "实时动态路径",
+    template: "模板路线",
+    "template+amap": "模板 + 实时路径",
+    amap: "高德路径结果",
+    "template+local-approach": "模板 + 本地接驳"
+  };
+  return labelMap[source] ?? source;
+}
+
+function formatTripMetricSource(source: string): string {
+  const labelMap: Record<string, string> = {
+    "dynamic-live": "动态路线实时结果",
+    "template-plus-approach": "模板骨架 + 出发点接驳",
+    "template-plus-live": "模板骨架 + 实时路径",
+    template: "模板路线估算"
+  };
+  return labelMap[source] ?? source;
+}
+
+function formatTripAlternativeSourceMeta(
+  sourceMeta: NonNullable<NonNullable<RidePlanResponse["recommended_trip"]>["source_meta"]>
+): string {
+  const routeBinding = sourceMeta.route_binding;
+  const tripTemplate = sourceMeta.trip_template;
+  const routeLabel = routeBinding?.selected_route_name ?? routeBinding?.selected_route_code ?? "未标注路线";
+  const matchLabel = routeBinding?.is_template_route_match ? "沿用原模板路线" : "改用更贴当前条件的路线";
+  const durationLabel = tripTemplate?.duration_bucket ? formatDurationBucket(tripTemplate.duration_bucket) : null;
+  if (durationLabel) {
+    return `${durationLabel}骨架，${routeLabel}承接，${matchLabel}`;
+  }
+  return `${routeLabel}承接，${matchLabel}`;
+}
+
+function buildDisplayDecisionSummary(
+  summary: NonNullable<RidePlanResponse["decision_summary"]>,
+  rideReadiness: RidePlanResponse["ride_readiness"] | null | undefined
+): NonNullable<RidePlanResponse["decision_summary"]> {
+  if (!rideReadiness) {
+    return summary;
+  }
+
+  return {
+    ...summary,
+    decision_reason: stripReadinessReason(summary.decision_reason),
+    confidence_notes: summary.confidence_notes.filter((item) => !item.startsWith("状态："))
+  };
+}
+
+function stripReadinessReason(reason: string): string {
+  const separator = " 当前身体和天气状态判断：";
+  const index = reason.indexOf(separator);
+  if (index === -1) {
+    return reason;
+  }
+  return reason.slice(0, index).trim();
 }
 
 function DebugDetailsPanel({

@@ -10,6 +10,7 @@ import {
   type ExperienceResult,
   type ExperienceRouteDetail,
 } from "./api";
+import { loadUserProfile } from "../settings/store";
 
 export function useExperienceHome() {
   const [content, setContent] = useState<ExperienceContent | null>(null);
@@ -46,7 +47,18 @@ export function useCompanionPlan() {
     setSubmitting(true);
     setError(null);
     try {
-      const payload = await createCompanionPlan(message);
+      const userProfile = loadUserProfile();
+      const payload = await createCompanionPlan({
+        message,
+        target_date: formatLocalDate(new Date()),
+        user_profile: hasRiderProfile(userProfile)
+          ? {
+              fitness_level: userProfile.fitness_level || undefined,
+              slope_tolerance: userProfile.slope_tolerance || undefined,
+              ride_style_preferences: userProfile.ride_style_preferences,
+            }
+          : undefined,
+      });
       setResponse(payload);
     } catch {
       setError("AI 伙伴暂时没有接住这句心情，请稍后再试。");
@@ -110,4 +122,15 @@ export function useExperienceRouteDetail(routeCode: string) {
   }, [routeCode]);
 
   return { routeDetail, loading, error };
+}
+
+function hasRiderProfile(userProfile: ReturnType<typeof loadUserProfile>) {
+  return Boolean(userProfile.fitness_level || userProfile.slope_tolerance || userProfile.ride_style_preferences.length > 0);
+}
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }

@@ -143,7 +143,14 @@ def test_post_ride_plan_returns_recommendation_payload() -> None:
         json={
             "query": "周六从闻涛路滨江段出发骑10公里，不想太累，风景好一点",
             "target_date": "2026-05-30",
-            "user_profile": {"fitness_level": "medium", "slope_tolerance": "avoid"},
+            "user_profile": {
+                "bike_type": "road",
+                "experience_level": "casual",
+                "riding_goal": "relax",
+                "fitness_level": "medium",
+                "slope_tolerance": "avoid",
+            },
+            "rider_state": {"fatigue_level": "normal", "mood": "relax", "last_ride_days_ago": 2},
         },
     )
 
@@ -153,11 +160,17 @@ def test_post_ride_plan_returns_recommendation_payload() -> None:
     assert body["parsed_constraints"]["target_distance_km"] == 10
     assert body["parsed_constraints"]["fitness_level"] == "medium"
     assert body["parsed_constraints"]["slope_tolerance"] == "avoid"
+    assert body["rider_profile"]["experience_level"] == "casual"
+    assert body["rider_state"]["fatigue_level"] == "normal"
+    assert body["ride_readiness"]["status"] in {"go", "light", "rest"}
+    assert body["ride_readiness"]["summary"]
     assert body["recommended_plan"]["route_code"].startswith("DYN-HANGZHOU-")
     assert body["alternatives"] == []
     assert body["decision_summary"]["go_decision"] in {"go", "caution", "no_go"}
     assert body["decision_summary"]["decision_title"]
     assert body["decision_summary"]["equipment_advice"]
+    assert all(not note.startswith("状态：") for note in body["decision_summary"]["confidence_notes"])
+    assert "当前身体和天气状态判断：" not in body["decision_summary"]["decision_reason"]
 
 
 def test_post_ride_plan_returns_clarification_prompt_when_query_missing_key_fields() -> None:
@@ -199,6 +212,23 @@ def test_preflight_returns_missing_core_fields_without_planning() -> None:
     assert body["parsed_constraints"]["origin_region"] is None
     assert body["missing_core_fields"] == ["start_point", "available_hours_or_target_distance_km"]
     assert body["clarification_prompt"] is not None
+
+
+def test_preflight_prefers_explicit_query_scene_over_conflicting_scene_hint() -> None:
+    client = TestClient(create_app(weather_provider=StubWeatherProvider()))
+    response = client.post(
+        "/api/v1/ride/plan/preflight",
+        json={
+            "query": "周末想从闻涛路滨江段出发骑两天，可以住一晚",
+            "target_date": "2026-05-30",
+            "planning_scene": "city_ride",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["parsed_constraints"]["planning_scene"] == "weekend_trip"
+    assert body["missing_core_fields"] == []
 
 
 def test_post_ride_plan_rejects_missing_core_fields_before_planning() -> None:
@@ -274,6 +304,9 @@ def test_post_ride_plan_accepts_structured_constraints_and_returns_dynamic_input
     assert route_map["approach_distance_km"] == 0.0
     assert route_map["total_distance_km"] == 10.0
     assert route_map["start_point"]["name"] == "闻涛路滨江段"
+    assert route_map["template"] is None
+    assert route_map["live"]["fact_source"] == "amap-dynamic"
+    assert route_map["resolved"]["metric_source"] == "dynamic-live"
     assert route_map["supply_points"]
     assert route_map["bailout_options"]
 

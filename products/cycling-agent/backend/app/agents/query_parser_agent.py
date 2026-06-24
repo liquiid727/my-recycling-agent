@@ -9,9 +9,11 @@ import re
 
 REGION_KEYWORDS = ("滨江", "西湖", "龙井", "湘湖", "余杭", "萧山")
 WEEKEND_DESTINATION_KEYWORDS = ("千岛湖", "湖州", "莫干山", "安吉")
+CITY_RIDE_SCENE_KEYWORDS = ("今晚", "今天晚上", "夜骑", "下班", "下午", "半天")
 
 
 def parse_query_fallback(query: str) -> dict:
+    # 这条兜底链路只依赖规则和正则，确保没有 LLM 也能产出最小可用约束。
     available_hours = _parse_available_hours(query)
     distance_match = re.search(r"(\d+(?:\.\d+)?)公里", query)
     origin_region = next((name for name in REGION_KEYWORDS if name in query), None)
@@ -37,6 +39,7 @@ def parse_query_fallback(query: str) -> dict:
         missing_fields.append("available_hours_or_target_distance_km")
 
     confidence = 0.92
+    # 缺的关键字段越多，后续推荐就越依赖追问，所以置信度也同步下调。
     if missing_fields:
         confidence = 0.68 if len(missing_fields) == 1 else 0.52
 
@@ -57,6 +60,14 @@ def parse_query_fallback(query: str) -> dict:
         "missing_fields": missing_fields,
         "confidence": confidence,
     }
+
+
+def infer_explicit_planning_scene(query: str) -> str | None:
+    if any(keyword in query for keyword in ("周末", "节假日", "两天", "三天", "2天", "3天", "过夜", *WEEKEND_DESTINATION_KEYWORDS)):
+        return "weekend_trip"
+    if any(keyword in query for keyword in CITY_RIDE_SCENE_KEYWORDS):
+        return "city_ride"
+    return None
 
 
 def enrich_parsed_constraints(parsed_constraints: dict, user_profile: dict | None = None) -> dict:
@@ -82,6 +93,7 @@ def build_structured_constraints(payload: dict | None, user_profile: dict | None
     structured = payload or {}
     profile = user_profile or {}
     defaults_applied: list[str] = []
+    # structured 输入优先，其次回退到用户画像，最后才落到系统默认值。
     fitness_level = structured.get("fitness_level") or profile.get("fitness_level") or "medium"
     slope_tolerance = structured.get("slope_tolerance") or profile.get("slope_tolerance") or "neutral"
     ride_style = structured.get("ride_style") or "general"
@@ -179,9 +191,7 @@ def _parse_slope_tolerance(query: str) -> str | None:
 
 
 def _parse_planning_scene(query: str) -> str:
-    if any(keyword in query for keyword in ("周末", "节假日", "两天", "三天", "2天", "3天", "过夜", *WEEKEND_DESTINATION_KEYWORDS)):
-        return "weekend_trip"
-    return "city_ride"
+    return infer_explicit_planning_scene(query) or "city_ride"
 
 
 def _parse_duration_bucket(query: str) -> str | None:
@@ -217,6 +227,7 @@ def _parse_lodging_preference(query: str) -> str | None:
 
 
 def _parse_start_point(query: str, origin_region: str | None) -> str | None:
+    # 模式顺序按“高确定性 -> 低确定性”排列，先匹配显式出发表达，再兜底到口语化位置描述。
     patterns = (
         r"从(.{2,20}?)(?:出发|开始|起步|骑)",
         r"我在(.{2,20}?)(?:，|,|。|；|;|\s|就|附近|$)",
@@ -259,6 +270,7 @@ def build_clarification_prompt(parsed_constraints: dict) -> str | None:
     if not missing_fields:
         return None
 
+    # 追问文案只暴露用户可理解的业务字段名，不把内部 slot key 直接返回给前端。
     label_map = {
         "target_date": "目标日期",
         "origin_region": "出发区域",

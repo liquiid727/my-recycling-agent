@@ -27,18 +27,22 @@ class LocalPoiProvider:
     provider_name = "local-poi-stub"
 
     def get_poi_context(self, route: dict[str, Any]) -> dict[str, Any]:
-        supply_points = route.get("supply_points", [])
-        bailout_options = route.get("bailout_options", [])
-        poi_labels = [f"{point['name']}({point['type']})" for point in supply_points[:3]]
-        bailout_labels = [option["name"] for option in bailout_options[:2]]
+        template_layer = _build_template_poi_layer(route)
+        resolved = _build_resolved_poi_summary(
+            supply_items=template_layer["supply_items"],
+            bailout_items=template_layer["bailout_items"],
+            fact_source="template",
+            source_layer="template-only",
+            supply_fact_source="template",
+            bailout_fact_source="template",
+        )
         return {
             "provider_name": self.provider_name,
             "poi_summary": {
-                "supply_count": len(supply_points),
-                "bailout_count": len(bailout_options),
-                "supply_labels": poi_labels,
-                "bailout_labels": bailout_labels,
-                "fact_source": "template",
+                **resolved,
+                "template": template_layer,
+                "live": None,
+                "resolved": resolved,
             },
         }
 
@@ -84,14 +88,28 @@ class AMapPoiProvider:
             raise RuntimeError("amap-poi-provider-missing-start-point")
 
         pois = self._search_poi(longitude=float(longitude), latitude=float(latitude))
+        template_layer = _build_template_poi_layer(route)
+        live_layer = {
+            "provider_name": self.provider_name,
+            "fact_source": "amap",
+            "supply_items": pois,
+            "bailout_items": [],
+        }
+        resolved = _build_resolved_poi_summary(
+            supply_items=pois,
+            bailout_items=template_layer["bailout_items"],
+            fact_source="amap",
+            source_layer="mixed",
+            supply_fact_source="amap",
+            bailout_fact_source="template",
+        )
         return {
             "provider_name": self.provider_name,
             "poi_summary": {
-                "supply_count": len(pois),
-                "bailout_count": len(route.get("bailout_options", [])),
-                "supply_labels": [f"{poi['name']}({poi['type']})" for poi in pois[:3]],
-                "bailout_labels": [option["name"] for option in route.get("bailout_options", [])[:2]],
-                "fact_source": "amap",
+                **resolved,
+                "template": template_layer,
+                "live": live_layer,
+                "resolved": resolved,
             },
             "poi_items": pois,
         }
@@ -217,3 +235,41 @@ def _normalize_anchor_type(raw_type: str | None) -> str:
     if "购物" in raw_type or "商圈" in raw_type:
         return "商圈"
     return raw_type.split(";")[0]
+
+
+def _build_template_poi_layer(route: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "fact_source": "template",
+        "supply_items": list(route.get("supply_points", [])),
+        "bailout_items": list(route.get("bailout_options", [])),
+    }
+
+
+def _build_resolved_poi_summary(
+    *,
+    supply_items: list[dict[str, Any]],
+    bailout_items: list[dict[str, Any]],
+    fact_source: str,
+    source_layer: str,
+    supply_fact_source: str | None,
+    bailout_fact_source: str | None,
+) -> dict[str, Any]:
+    return {
+        "supply_count": len(supply_items),
+        "bailout_count": len(bailout_items),
+        "supply_labels": [_poi_label(item) for item in supply_items[:3]],
+        "bailout_labels": [_bailout_label(item) for item in bailout_items[:2]],
+        "fact_source": fact_source,
+        "source_layer": source_layer,
+        "supply_fact_source": supply_fact_source,
+        "bailout_fact_source": bailout_fact_source,
+    }
+
+
+def _poi_label(item: dict[str, Any]) -> str:
+    poi_type = item.get("type")
+    return f"{item['name']}({poi_type})" if poi_type else item["name"]
+
+
+def _bailout_label(item: dict[str, Any]) -> str:
+    return str(item.get("name") or "")

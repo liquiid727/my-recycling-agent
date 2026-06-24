@@ -4,7 +4,8 @@ spec_version: "2026-06-16"
 description: >
   Stable golden cases for the current Hangzhou-first cycling-agent baseline.
   These cases focus on clarification, successful planning, no-match behavior,
-  and provider fallback semantics.
+  provider fallback semantics, and the first rider-state/readiness/chat-copy
+  regression chain.
 
 cases:
   - case_id: city-clarify-evening-vague
@@ -168,3 +169,108 @@ cases:
           - route_provider
           - poi_provider
       decision_summary_present: true
+
+  - case_id: chat-ready-city-tired-recovery-copy
+    planning_scene: city_ride
+    request:
+      endpoint: /api/v1/ride/chat/turn
+      method: POST
+      payload:
+        messages:
+          - role: user
+            content: 凤起路出发，骑 2 小时吧
+        planning_scene: city_ride
+        target_date: "2026-06-21"
+        rider_state:
+          fatigue_level: tired
+          mood: recover
+          last_ride_days_ago: 0
+    expected:
+      ready_to_plan: true
+      assistant_message_contains:
+        - 轻松恢复一下
+        - 风和温度
+      planner_request:
+        planning_scene: city_ride
+        planning_mode: route
+
+  - case_id: city-readiness-hot-tired
+    planning_scene: city_ride
+    request:
+      endpoint: /api/v1/ride/plan
+      method: POST
+      setup_hint: inject hot weather provider stub
+      payload:
+        query: 今天从闻涛路滨江段出发骑2小时，轻松一点
+        target_date: "2026-06-21"
+        user_profile:
+          fitness_level: low
+          slope_tolerance: avoid
+          ride_style_preferences:
+            - scenic
+            - relaxed
+        rider_state:
+          fatigue_level: tired
+          mood: recover
+          last_ride_days_ago: 0
+    expected:
+      status: success
+      ride_readiness:
+        status_in:
+          - light
+          - rest
+        recommended_intensity_in:
+          - light
+          - rest
+        summary_present: true
+      decision_summary:
+        scene: city_ride
+        go_decision_in:
+          - caution
+          - no_go
+      recommended_plan:
+        go_decision_in:
+          - caution
+          - no_go
+
+  - case_id: weekend-readiness-fresh-two-day
+    planning_scene: weekend_trip
+    request:
+      endpoint: /api/v1/ride/plan
+      method: POST
+      payload:
+        planning_mode: nearby_trip
+        planning_scene: weekend_trip
+        input_mode: structured
+        query: 周末从滨江去千岛湖骑两天
+        target_date: "2026-06-21"
+        rider_state:
+          fatigue_level: fresh
+          mood: explore
+          last_ride_days_ago: 5
+        structured_constraints:
+          origin_region: 滨江
+          start_point: 闻涛路滨江段
+          fitness_level: medium
+          ride_style: scenic_relaxed
+          slope_tolerance: neutral
+          duration_bucket: two_day
+          destination_preferences:
+            - 千岛湖
+          return_preference: public_transport
+          overnight_preference: required
+          lodging_preference: 湖边酒店
+          cross_city_allowed: true
+    expected:
+      status: success
+      ride_readiness:
+        status_in:
+          - go
+        recommended_intensity_in:
+          - steady
+        summary_present: true
+      decision_summary:
+        scene: weekend_trip
+        go_decision_in:
+          - go
+          - caution

@@ -9,14 +9,36 @@ from datetime import date
 from pydantic import BaseModel, Field
 
 
-class UserProfilePayload(BaseModel):
+class RiderProfilePayload(BaseModel):
     id: str | None = None
     uid: str | None = None
     nickname: str | None = None
     home_region: str | None = None
+    bike_type: str | None = Field(default=None, pattern="^(road|folding|city|gravel|other)$")
+    experience_level: str | None = Field(default=None, pattern="^(beginner|casual|regular)$")
+    riding_goal: str | None = Field(default=None, pattern="^(relax|exercise|explore|social|recover|build_habit)$")
     fitness_level: str | None = Field(default=None, pattern="^(low|medium|high)$")
     ride_style_preferences: list[str] = Field(default_factory=list)
     slope_tolerance: str | None = Field(default=None, pattern="^(avoid|neutral|prefer)$")
+
+
+class UserProfilePayload(RiderProfilePayload):
+    pass
+
+
+class RiderStatePayload(BaseModel):
+    fatigue_level: str | None = Field(default=None, pattern="^(fresh|normal|tired)$")
+    mood: str | None = Field(default=None, pattern="^(relax|exercise|explore|social|recover)$")
+    last_ride_days_ago: int | None = Field(default=None, ge=0)
+
+
+class RideReadinessSchema(BaseModel):
+    status: str = Field(pattern="^(go|light|rest)$")
+    score: float
+    summary: str
+    reasons: list[str] = Field(default_factory=list)
+    caution_flags: list[str] = Field(default_factory=list)
+    recommended_intensity: str = Field(pattern="^(light|steady|rest)$")
 
 
 class RidePlanRequestSchema(BaseModel):
@@ -27,7 +49,8 @@ class RidePlanRequestSchema(BaseModel):
     planning_scene: str | None = Field(default=None, pattern="^(city_ride|weekend_trip)$")
     input_mode: str = Field(default="natural", pattern="^(natural|structured)$")
     structured_constraints: "StructuredConstraintsPayload | None" = None
-    user_profile: UserProfilePayload | None = None
+    user_profile: RiderProfilePayload | None = None
+    rider_state: RiderStatePayload | None = None
 
 
 class OriginLocationPayload(BaseModel):
@@ -73,7 +96,8 @@ class ChatTurnRequestSchema(BaseModel):
     planning_scene: str = Field(default="city_ride", pattern="^(city_ride|weekend_trip)$")
     target_date: date
     slot_state: dict = Field(default_factory=dict)
-    user_profile: UserProfilePayload | None = None
+    user_profile: RiderProfilePayload | None = None
+    rider_state: RiderStatePayload | None = None
 
 
 class ChatTurnResponseSchema(BaseModel):
@@ -84,6 +108,7 @@ class ChatTurnResponseSchema(BaseModel):
     ready_to_plan: bool
     planner_request: dict | None = None
     ui_hints: dict = Field(default_factory=dict)
+    rider_state: RiderStatePayload | None = None
 
 
 class RoutePlanCardSchema(BaseModel):
@@ -115,6 +140,7 @@ class NearbyTripCardSchema(BaseModel):
     lodging_plan: str | None = None
     equipment_advice: list[str] = Field(default_factory=list)
     weather_window_notes: str | None = None
+    source_meta: dict | None = None
 
 
 class DecisionSummarySchema(BaseModel):
@@ -168,6 +194,9 @@ class RidePlanResponseSchema(BaseModel):
     request_no: str
     parsed_constraints: dict
     input_summary: dict
+    rider_profile: RiderProfilePayload | None = None
+    rider_state: RiderStatePayload | None = None
+    ride_readiness: RideReadinessSchema | None = None
     route_map: dict | None = None
     clarification_prompt: str | None = None
     no_match_reason: str | None = None
@@ -348,6 +377,7 @@ class RideRequestAuditSchema(BaseModel):
     ride_style: str | None = None
     parsed_constraints: dict
     user_profile: dict | None = None
+    rider_state: dict | None = None
     created_at: str
 
 
