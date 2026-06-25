@@ -19,7 +19,7 @@
     --pencil: color-mix(in oklch, var(--fg) 62%, transparent);
     --tape: oklch(92% 0.038 86);
     --photo: oklch(99% 0.004 95);
-    --font-display: "Iowan Old Style", "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
+    --font-display: "Cormorant Garamond", "ZCOOL XiaoWei", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
     --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Segoe UI", system-ui, sans-serif;
     --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
     --fs-h1: clamp(44px, 6vw, 76px);
@@ -278,6 +278,7 @@
 
   .topnav-nav a {
     font-size: 14px;
+    font-weight: 600;
     color: var(--muted);
   }
 
