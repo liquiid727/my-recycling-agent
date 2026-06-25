@@ -20,7 +20,7 @@
 ### Backend
 
 ```bash
-cd /Users/liquiid/code/cycling-agent-docs/products/cycling-agent/backend
+cd backend
 python3 -m pip install -e ".[dev]"
 uvicorn app.main:app --reload
 ```
@@ -53,7 +53,6 @@ export CYCLING_AGENT_DATABASE_URL=postgresql://cycling:cycling@127.0.0.1:54329/c
 本地运行前，先起 `PostgreSQL + Redis`：
 
 ```bash
-cd /Users/liquiid/code/cycling-agent-docs/products/cycling-agent
 docker compose -f docker-compose.dev.yml up -d
 ```
 
@@ -125,7 +124,7 @@ CYCLING_AGENT_LLM_THINKING=disabled
 ### Frontend
 
 ```bash
-cd /Users/liquiid/code/cycling-agent-docs/products/cycling-agent/frontend
+cd frontend
 npm install
 npm run dev
 ```
@@ -150,14 +149,14 @@ VITE_AMAP_JS_API_KEY=你的高德JSKey npm run dev
 ### Backend tests
 
 ```bash
-cd /Users/liquiid/code/cycling-agent-docs/products/cycling-agent/backend
+cd backend
 pytest tests -v
 ```
 
 如果已经配置可用高德 key，可额外跑 live 集成验证：
 
 ```bash
-cd /Users/liquiid/code/cycling-agent-docs/products/cycling-agent/backend
+cd backend
 CYCLING_AGENT_AMAP_WEB_API_KEY=你的高德key pytest tests/test_amap_live_integration.py -v
 python scripts/verify_amap_live.py
 ```
@@ -165,7 +164,7 @@ python scripts/verify_amap_live.py
 如果已经配置可用 LLM 参数，也可额外跑 live 集成验证：
 
 ```bash
-cd /Users/liquiid/code/cycling-agent-docs/products/cycling-agent/backend
+cd backend
 CYCLING_AGENT_LLM_API_BASE_URL=... \
 CYCLING_AGENT_LLM_API_KEY=... \
 CYCLING_AGENT_LLM_MODEL=... \
@@ -177,7 +176,7 @@ python scripts/verify_llm_live.py
 如果已经起了本地 `PostgreSQL + Redis`，也可额外跑基础设施 live 验证：
 
 ```bash
-cd /Users/liquiid/code/cycling-agent-docs/products/cycling-agent/backend
+cd backend
 CYCLING_AGENT_DATABASE_URL=postgresql://cycling:cycling@127.0.0.1:54329/cycling_agent \
 CYCLING_AGENT_REDIS_URL=redis://127.0.0.1:63799/0 \
 pytest tests/test_storage_live_integration.py -v
@@ -187,14 +186,14 @@ python scripts/verify_storage_live.py
 ### Frontend tests
 
 ```bash
-cd /Users/liquiid/code/cycling-agent-docs/products/cycling-agent/frontend
+cd frontend
 npm test
 ```
 
 ### Frontend build
 
 ```bash
-cd /Users/liquiid/code/cycling-agent-docs/products/cycling-agent/frontend
+cd frontend
 npm run build
 ```
 
