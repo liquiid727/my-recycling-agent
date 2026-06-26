@@ -1,36 +1,27 @@
-
 1. 首页广告先设置一下，然后versel这里布置一、运行一下这个产品和界面吧
+2. CIM（Cycling Intelligence Model）
+   用户模型
+   目标模型
+   骑行状态模型
+   习惯模型
+   决策模型
 
+这会成为你的 Agent 大脑。	
 
-
-01. CIM（Cycling Intelligence Model）
-用户模型
-目标模型
-骑行状态模型
-习惯模型
-决策模型
-
-这会成为你的 Agent 大脑。
-
-
-
-02. Agent PRD
-首页
-今日建议
-路线规划
-骑后总结
-月报
-Agent聊天
+2. Agent PRD
+   首页
+   今日建议
+   路线规划
+   骑后总结
+   Agent聊天
 
 对应小程序 / App。
 
-
-
-03. Agent Eval Dataset
-Case001
-Case002
-...
-Case100
+3. Agent Eval Dataset
+   Case001
+   Case002
+   ...
+   Case100
 
 专门用于验证：
 
